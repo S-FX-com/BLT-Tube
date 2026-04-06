@@ -1,32 +1,32 @@
 <?php
 /**
- * Plugin Name: YouTube Playlist to WordPress
- * Plugin URI:  https://github.com/S-FX-com/Obie_YouTube-to-WP
+ * Plugin Name: ZymTube
+ * Plugin URI:  https://github.com/s-fx-com/zymtube
  * Description: Import YouTube playlist videos into any WordPress Custom Post Type with full field mapping, thumbnails, transcripts, and scheduled sync.
  * Version:     1.0.0
  * Author:      Obie
  * License:     GPL-2.0-or-later
- * Text Domain: yt-to-wp
+ * Text Domain: zymtube
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'YTWP_VERSION', '1.0.0' );
-define( 'YTWP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'YTWP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'YTWP_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+define( 'ZTUBE_VERSION', '1.0.0' );
+define( 'ZTUBE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+define( 'ZTUBE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+define( 'ZTUBE_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
-require_once YTWP_PLUGIN_DIR . 'includes/class-ytwp-youtube-api.php';
-require_once YTWP_PLUGIN_DIR . 'includes/class-ytwp-admin.php';
-require_once YTWP_PLUGIN_DIR . 'includes/class-ytwp-sync-engine.php';
-require_once YTWP_PLUGIN_DIR . 'includes/class-ytwp-cron.php';
+require_once ZTUBE_PLUGIN_DIR . 'includes/class-ztube-youtube-api.php';
+require_once ZTUBE_PLUGIN_DIR . 'includes/class-ztube-admin.php';
+require_once ZTUBE_PLUGIN_DIR . 'includes/class-ztube-sync-engine.php';
+require_once ZTUBE_PLUGIN_DIR . 'includes/class-ztube-cron.php';
 
 /**
  * Main plugin class.
  */
-final class YouTube_To_WP {
+final class ZymTube {
 
     private static $instance = null;
 
@@ -44,14 +44,14 @@ final class YouTube_To_WP {
     }
 
     public function init() {
-        YTWP_Admin::get_instance();
-        YTWP_Cron::get_instance();
+        ZTUBE_Admin::get_instance();
+        ZTUBE_Cron::get_instance();
     }
 
     public function activate() {
         // Create default options.
-        if ( false === get_option( 'ytwp_settings' ) ) {
-            update_option( 'ytwp_settings', array(
+        if ( false === get_option( 'ztube_settings' ) ) {
+            update_option( 'ztube_settings', array(
                 'api_key'        => '',
                 'playlist_id'    => '',
                 'post_type'      => 'post',
@@ -64,12 +64,12 @@ final class YouTube_To_WP {
         }
 
         // Schedule cron if a cadence is set.
-        YTWP_Cron::schedule_sync();
+        ZTUBE_Cron::schedule_sync();
     }
 
     public function deactivate() {
-        YTWP_Cron::unschedule_sync();
+        ZTUBE_Cron::unschedule_sync();
     }
 }
 
-YouTube_To_WP::get_instance();
+ZymTube::get_instance();

@@ -1,10 +1,10 @@
 /**
- * YouTube to WP — Admin JavaScript
+ * ZymTube — Admin JavaScript
  */
 (function ($) {
     'use strict';
 
-    var $notices = $('#ytwp-notices');
+    var $notices = $('#ztube-notices');
 
     /* ---------------------------------------------------------------
      * Helpers
@@ -26,10 +26,10 @@
         if (loading) {
             $btn.prop('disabled', true);
             $btn.data('original-text', $btn.text());
-            $btn.append('<span class="ytwp-spinner"></span>');
+            $btn.append('<span class="ztube-spinner"></span>');
         } else {
             $btn.prop('disabled', false);
-            $btn.find('.ytwp-spinner').remove();
+            $btn.find('.ztube-spinner').remove();
         }
     }
 
@@ -37,10 +37,10 @@
      * 1. Validate API Key
      * ------------------------------------------------------------- */
 
-    $('#ytwp-validate-key').on('click', function () {
+    $('#ztube-validate-key').on('click', function () {
         var $btn = $(this);
-        var apiKey = $('#ytwp_api_key').val().trim();
-        var $status = $('#ytwp-key-status');
+        var apiKey = $('#ztube_api_key').val().trim();
+        var $status = $('#ztube-key-status');
 
         if (!apiKey) {
             $status.text('Please enter an API key.').removeClass('valid').addClass('invalid');
@@ -50,9 +50,9 @@
         setLoading($btn, true);
         $status.text('Checking...').removeClass('valid invalid');
 
-        $.post(ytwpAdmin.ajax_url, {
-            action: 'ytwp_validate_api_key',
-            nonce: ytwpAdmin.nonce,
+        $.post(ztubeAdmin.ajax_url, {
+            action: 'ztube_validate_api_key',
+            nonce: ztubeAdmin.nonce,
             api_key: apiKey
         }, function (res) {
             setLoading($btn, false);
@@ -71,19 +71,19 @@
      * 2. Search Channels
      * ------------------------------------------------------------- */
 
-    $('#ytwp-search-channels').on('click', function () {
+    $('#ztube-search-channels').on('click', function () {
         var $btn = $(this);
-        var query = $('#ytwp_channel_search').val().trim();
-        var $results = $('#ytwp-channel-results');
+        var query = $('#ztube_channel_search').val().trim();
+        var $results = $('#ztube-channel-results');
 
         if (!query) return;
 
         setLoading($btn, true);
         $results.html('<em>Searching...</em>');
 
-        $.post(ytwpAdmin.ajax_url, {
-            action: 'ytwp_search_channels',
-            nonce: ytwpAdmin.nonce,
+        $.post(ztubeAdmin.ajax_url, {
+            action: 'ztube_search_channels',
+            nonce: ztubeAdmin.nonce,
             query: query
         }, function (res) {
             setLoading($btn, false);
@@ -101,7 +101,7 @@
 
             $.each(res.data, function (i, ch) {
                 var $item = $(
-                    '<div class="ytwp-channel-item" data-channel-id="' + ch.id + '">' +
+                    '<div class="ztube-channel-item" data-channel-id="' + ch.id + '">' +
                     '<img src="' + ch.thumb + '" alt="">' +
                     '<span class="channel-title">' + ch.title + '</span>' +
                     '</div>'
@@ -115,20 +115,20 @@
     });
 
     // Click a channel → load its playlists.
-    $(document).on('click', '.ytwp-channel-item', function () {
+    $(document).on('click', '.ztube-channel-item', function () {
         var channelId = $(this).data('channel-id');
-        var $row = $('#ytwp-playlists-row');
-        var $select = $('#ytwp-playlists-select');
+        var $row = $('#ztube-playlists-row');
+        var $select = $('#ztube-playlists-select');
 
-        $('.ytwp-channel-item').css('border-color', '#ddd').css('background', '');
+        $('.ztube-channel-item').css('border-color', '#ddd').css('background', '');
         $(this).css('border-color', '#2271b1').css('background', '#f0f6fc');
 
         $select.html('<option value="">Loading playlists...</option>');
         $row.show();
 
-        $.post(ytwpAdmin.ajax_url, {
-            action: 'ytwp_get_playlists',
-            nonce: ytwpAdmin.nonce,
+        $.post(ztubeAdmin.ajax_url, {
+            action: 'ztube_get_playlists',
+            nonce: ztubeAdmin.nonce,
             channel_id: channelId
         }, function (res) {
             $select.empty().append('<option value="">— Select a playlist —</option>');
@@ -143,10 +143,10 @@
     });
 
     // When a playlist is selected, populate the playlist ID field.
-    $(document).on('change', '#ytwp-playlists-select', function () {
+    $(document).on('change', '#ztube-playlists-select', function () {
         var val = $(this).val();
         if (val) {
-            $('#ytwp_playlist_id').val(val);
+            $('#ztube_playlist_id').val(val);
         }
     });
 
@@ -154,15 +154,15 @@
      * 3. Load Custom Fields for Post Type
      * ------------------------------------------------------------- */
 
-    $('#ytwp-load-fields').on('click', function () {
+    $('#ztube-load-fields').on('click', function () {
         var $btn = $(this);
-        var postType = $('#ytwp_post_type').val();
+        var postType = $('#ztube_post_type').val();
 
         setLoading($btn, true);
 
-        $.post(ytwpAdmin.ajax_url, {
-            action: 'ytwp_get_post_type_fields',
-            nonce: ytwpAdmin.nonce,
+        $.post(ztubeAdmin.ajax_url, {
+            action: 'ztube_get_post_type_fields',
+            nonce: ztubeAdmin.nonce,
             post_type: postType
         }, function (res) {
             setLoading($btn, false);
@@ -175,9 +175,9 @@
             var fieldKeys = Object.keys(fields);
 
             // Populate all existing WP field selects.
-            $('.ytwp-wp-field-select').each(function () {
+            $('.ztube-wp-field-select').each(function () {
                 var $sel = $(this);
-                var currentVal = $sel.siblings('.ytwp-wp-field-input').val();
+                var currentVal = $sel.siblings('.ztube-wp-field-input').val();
 
                 $sel.empty().append('<option value="">— Choose detected field —</option>');
                 $.each(fields, function (key, label) {
@@ -191,7 +191,7 @@
             });
 
             // Store fields globally for new rows.
-            window._ytwpDetectedFields = fields;
+            window._ztubeDetectedFields = fields;
 
             showNotice('Loaded ' + fieldKeys.length + ' custom field(s) for "' + postType + '".');
         }).fail(function () {
@@ -201,10 +201,10 @@
     });
 
     // When a detected-field select changes, update the text input.
-    $(document).on('change', '.ytwp-wp-field-select', function () {
+    $(document).on('change', '.ztube-wp-field-select', function () {
         var val = $(this).val();
         if (val) {
-            $(this).siblings('.ytwp-wp-field-input').val(val);
+            $(this).siblings('.ztube-wp-field-input').val(val);
         }
     });
 
@@ -212,24 +212,24 @@
      * 4. Field Mapping Rows
      * ------------------------------------------------------------- */
 
-    $('#ytwp-add-mapping').on('click', function () {
-        var template = $('#tmpl-ytwp-mapping-row').html();
+    $('#ztube-add-mapping').on('click', function () {
+        var template = $('#tmpl-ztube-mapping-row').html();
         var $row = $(template);
 
         // If we have detected fields, populate the select.
-        if (window._ytwpDetectedFields && Object.keys(window._ytwpDetectedFields).length) {
-            var $sel = $row.find('.ytwp-wp-field-select');
+        if (window._ztubeDetectedFields && Object.keys(window._ztubeDetectedFields).length) {
+            var $sel = $row.find('.ztube-wp-field-select');
             $sel.empty().append('<option value="">— Choose detected field —</option>');
-            $.each(window._ytwpDetectedFields, function (key, label) {
+            $.each(window._ztubeDetectedFields, function (key, label) {
                 $sel.append('<option value="' + key + '">' + label + '</option>');
             });
             $sel.show();
         }
 
-        $('#ytwp-mapping-rows').append($row);
+        $('#ztube-mapping-rows').append($row);
     });
 
-    $(document).on('click', '.ytwp-remove-row', function () {
+    $(document).on('click', '.ztube-remove-row', function () {
         $(this).closest('tr').remove();
     });
 
@@ -237,36 +237,36 @@
      * 5. Save Settings
      * ------------------------------------------------------------- */
 
-    $('#ytwp-settings-form').on('submit', function (e) {
+    $('#ztube-settings-form').on('submit', function (e) {
         e.preventDefault();
 
-        var $btn = $('#ytwp-save-settings');
+        var $btn = $('#ztube-save-settings');
         setLoading($btn, true);
 
         // Gather mapping rows.
         var ytFields = [];
         var wpFields = [];
-        $('.ytwp-mapping-row').each(function () {
-            ytFields.push($(this).find('.ytwp-yt-field-select').val());
-            wpFields.push($(this).find('.ytwp-wp-field-input').val());
+        $('.ztube-mapping-row').each(function () {
+            ytFields.push($(this).find('.ztube-yt-field-select').val());
+            wpFields.push($(this).find('.ztube-wp-field-input').val());
         });
 
         var data = {
-            action: 'ytwp_save_settings',
-            nonce: ytwpAdmin.nonce,
-            api_key: $('#ytwp_api_key').val(),
-            playlist_id: $('#ytwp_playlist_id').val(),
-            post_type: $('#ytwp_post_type').val(),
-            sync_cadence: $('#ytwp_sync_cadence').val(),
-            description_target: $('#ytwp_description_target').val(),
-            transcript_target: $('#ytwp_transcript_target').val(),
-            set_thumbnail: $('#ytwp_set_thumbnail').is(':checked') ? 1 : 0,
-            assign_keywords: $('#ytwp_assign_keywords').is(':checked') ? 1 : 0,
+            action: 'ztube_save_settings',
+            nonce: ztubeAdmin.nonce,
+            api_key: $('#ztube_api_key').val(),
+            playlist_id: $('#ztube_playlist_id').val(),
+            post_type: $('#ztube_post_type').val(),
+            sync_cadence: $('#ztube_sync_cadence').val(),
+            description_target: $('#ztube_description_target').val(),
+            transcript_target: $('#ztube_transcript_target').val(),
+            set_thumbnail: $('#ztube_set_thumbnail').is(':checked') ? 1 : 0,
+            assign_keywords: $('#ztube_assign_keywords').is(':checked') ? 1 : 0,
             'yt_fields[]': ytFields,
             'wp_fields[]': wpFields
         };
 
-        $.post(ytwpAdmin.ajax_url, data, function (res) {
+        $.post(ztubeAdmin.ajax_url, data, function (res) {
             setLoading($btn, false);
             if (res.success) {
                 showNotice('Settings saved successfully.');
@@ -283,11 +283,11 @@
      * 6. Manual Sync
      * ------------------------------------------------------------- */
 
-    $('#ytwp-manual-sync').on('click', function () {
+    $('#ztube-manual-sync').on('click', function () {
         var $btn = $(this);
-        var $progress = $('#ytwp-sync-progress');
-        var $bar = $('#ytwp-progress-inner');
-        var $text = $('#ytwp-sync-status-text');
+        var $progress = $('#ztube-sync-progress');
+        var $bar = $('#ztube-progress-inner');
+        var $text = $('#ztube-sync-status-text');
 
         if (!confirm('This will import all videos from the configured playlist. Continue?')) {
             return;
@@ -300,9 +300,9 @@
 
         // Start polling progress.
         var pollInterval = setInterval(function () {
-            $.post(ytwpAdmin.ajax_url, {
-                action: 'ytwp_sync_status',
-                nonce: ytwpAdmin.nonce
+            $.post(ztubeAdmin.ajax_url, {
+                action: 'ztube_sync_status',
+                nonce: ztubeAdmin.nonce
             }, function (res) {
                 if (res.success && res.data && res.data.status === 'running') {
                     $bar.css('width', res.data.percent + '%');
@@ -311,9 +311,9 @@
             });
         }, 2000);
 
-        $.post(ytwpAdmin.ajax_url, {
-            action: 'ytwp_manual_sync',
-            nonce: ytwpAdmin.nonce
+        $.post(ztubeAdmin.ajax_url, {
+            action: 'ztube_manual_sync',
+            nonce: ztubeAdmin.nonce
         }, function (res) {
             clearInterval(pollInterval);
             setLoading($btn, false);

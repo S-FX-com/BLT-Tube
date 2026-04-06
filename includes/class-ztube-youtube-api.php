@@ -7,14 +7,14 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class YTWP_YouTube_API {
+class ZTUBE_YouTube_API {
 
     private $api_key;
     private $api_base = 'https://www.googleapis.com/youtube/v3';
 
     public function __construct( $api_key = '' ) {
         if ( empty( $api_key ) ) {
-            $settings      = get_option( 'ytwp_settings', array() );
+            $settings      = get_option( 'ztube_settings', array() );
             $this->api_key = isset( $settings['api_key'] ) ? $settings['api_key'] : '';
         } else {
             $this->api_key = $api_key;

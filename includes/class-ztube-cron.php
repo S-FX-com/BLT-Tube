@@ -7,9 +7,9 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class YTWP_Cron {
+class ZTUBE_Cron {
 
-    const HOOK = 'ytwp_scheduled_sync';
+    const HOOK = 'ztube_scheduled_sync';
 
     private static $instance = null;
 
@@ -31,15 +31,15 @@ class YTWP_Cron {
     public function add_custom_schedules( $schedules ) {
         $schedules['every_5_min'] = array(
             'interval' => 300,
-            'display'  => __( 'Every 5 Minutes', 'yt-to-wp' ),
+            'display'  => __( 'Every 5 Minutes', 'zymtube' ),
         );
         $schedules['every_15_min'] = array(
             'interval' => 900,
-            'display'  => __( 'Every 15 Minutes', 'yt-to-wp' ),
+            'display'  => __( 'Every 15 Minutes', 'zymtube' ),
         );
         $schedules['weekly'] = array(
             'interval' => 604800,
-            'display'  => __( 'Once Weekly', 'yt-to-wp' ),
+            'display'  => __( 'Once Weekly', 'zymtube' ),
         );
         return $schedules;
     }
@@ -48,7 +48,7 @@ class YTWP_Cron {
      * Run the scheduled sync.
      */
     public function run_sync() {
-        $engine = new YTWP_Sync_Engine();
+        $engine = new ZTUBE_Sync_Engine();
         $engine->sync_all( 'cron' );
     }
 
@@ -56,7 +56,7 @@ class YTWP_Cron {
      * Schedule the sync event based on saved cadence.
      */
     public static function schedule_sync() {
-        $settings = get_option( 'ytwp_settings', array() );
+        $settings = get_option( 'ztube_settings', array() );
         $cadence  = isset( $settings['sync_cadence'] ) ? $settings['sync_cadence'] : 'daily';
 
         if ( 'disabled' === $cadence ) {

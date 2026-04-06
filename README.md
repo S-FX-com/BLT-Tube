@@ -1,4 +1,4 @@
-# YouTube Playlist to WordPress
+# ZymTube
 
 A WordPress plugin that imports videos from a YouTube playlist into any Custom Post Type, with full field mapping, thumbnail import, transcript capture, keyword tagging, and scheduled sync.
 
@@ -25,9 +25,9 @@ A WordPress plugin that imports videos from a YouTube playlist into any Custom P
 
 ## Installation
 
-1. Download or clone this repository into `wp-content/plugins/youtube-to-wp/`.
+1. Download or clone this repository into `wp-content/plugins/zymtube/`.
 2. Activate the plugin from **Plugins → Installed Plugins**.
-3. Navigate to **YouTube to WP** in the admin sidebar.
+3. Navigate to **ZymTube** in the admin sidebar.
 
 ## Setup
 
@@ -63,18 +63,18 @@ A WordPress plugin that imports videos from a YouTube playlist into any Custom P
 ## File Structure
 
 ```
-youtube-to-wp/
-├── youtube-to-wp.php              # Main plugin entry point
+zymtube/
+├── zymtube.php                      # Main plugin entry point
 ├── includes/
-│   ├── class-ytwp-youtube-api.php # YouTube Data API v3 wrapper
-│   ├── class-ytwp-admin.php       # Admin pages, settings, AJAX handlers
-│   ├── class-ytwp-sync-engine.php # Video import / sync logic
-│   └── class-ytwp-cron.php        # WP-Cron scheduling
+│   ├── class-ztube-youtube-api.php  # YouTube Data API v3 wrapper
+│   ├── class-ztube-admin.php        # Admin pages, settings, AJAX handlers
+│   ├── class-ztube-sync-engine.php  # Video import / sync logic
+│   └── class-ztube-cron.php         # WP-Cron scheduling
 ├── assets/
 │   ├── css/
-│   │   └── admin.css              # Admin page styles
+│   │   └── admin.css                # Admin page styles
 │   └── js/
-│       └── admin.js               # Admin page interactivity
+│       └── admin.js                 # Admin page interactivity
 └── README.md
 ```
 
