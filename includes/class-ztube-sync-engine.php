@@ -7,14 +7,14 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class YTWP_Sync_Engine {
+class ZTUBE_Sync_Engine {
 
     private $settings;
     private $api;
 
     public function __construct() {
-        $this->settings = get_option( 'ytwp_settings', array() );
-        $this->api      = new YTWP_YouTube_API();
+        $this->settings = get_option( 'ztube_settings', array() );
+        $this->api      = new ZTUBE_YouTube_API();
     }
 
     /**
@@ -141,8 +141,8 @@ class YTWP_Sync_Engine {
         }
 
         // Store the YouTube video ID as meta so we can detect duplicates.
-        update_post_meta( $post_id, '_ytwp_video_id', $video['video_id'] );
-        update_post_meta( $post_id, '_ytwp_video_url', $video['video_url'] );
+        update_post_meta( $post_id, '_ztube_video_id', $video['video_id'] );
+        update_post_meta( $post_id, '_ztube_video_url', $video['video_url'] );
 
         // Process field mapping.
         foreach ( $field_mapping as $yt_field => $wp_meta_key ) {
@@ -169,7 +169,7 @@ class YTWP_Sync_Engine {
         if ( 'custom_field' === $trans_target && ! empty( $transcript ) ) {
             // Check if transcript is in the field mapping — if not, store in a default key.
             if ( ! isset( $field_mapping['transcript'] ) ) {
-                update_post_meta( $post_id, 'ytwp_transcript', $transcript );
+                update_post_meta( $post_id, 'ztube_transcript', $transcript );
             }
         }
 
@@ -232,7 +232,7 @@ class YTWP_Sync_Engine {
             "SELECT pm.post_id
              FROM {$wpdb->postmeta} pm
              INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
-             WHERE pm.meta_key = '_ytwp_video_id'
+             WHERE pm.meta_key = '_ztube_video_id'
              AND pm.meta_value = %s
              AND p.post_type = %s
              AND p.post_status != 'trash'
@@ -263,7 +263,7 @@ class YTWP_Sync_Engine {
      * Update sync progress transient for AJAX polling.
      */
     private function update_progress( $message, $percent ) {
-        set_transient( 'ytwp_sync_progress', array(
+        set_transient( 'ztube_sync_progress', array(
             'status'  => 'running',
             'message' => $message,
             'percent' => $percent,
@@ -274,7 +274,7 @@ class YTWP_Sync_Engine {
      * Log a sync operation.
      */
     private function log_sync( $type, $found, $imported, $skipped, $errors ) {
-        $log   = get_option( 'ytwp_sync_log', array() );
+        $log   = get_option( 'ztube_sync_log', array() );
         $log[] = array(
             'date'     => current_time( 'Y-m-d H:i:s' ),
             'type'     => $type,
@@ -289,9 +289,9 @@ class YTWP_Sync_Engine {
             $log = array_slice( $log, -100 );
         }
 
-        update_option( 'ytwp_sync_log', $log );
+        update_option( 'ztube_sync_log', $log );
 
         // Clear progress.
-        delete_transient( 'ytwp_sync_progress' );
+        delete_transient( 'ztube_sync_progress' );
     }
 }

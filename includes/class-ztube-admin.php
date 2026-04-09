@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class YTWP_Admin {
+class ZTUBE_Admin {
 
     private static $instance = null;
 
@@ -23,59 +23,59 @@ class YTWP_Admin {
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 
         // AJAX handlers.
-        add_action( 'wp_ajax_ytwp_validate_api_key', array( $this, 'ajax_validate_api_key' ) );
-        add_action( 'wp_ajax_ytwp_search_channels', array( $this, 'ajax_search_channels' ) );
-        add_action( 'wp_ajax_ytwp_get_playlists', array( $this, 'ajax_get_playlists' ) );
-        add_action( 'wp_ajax_ytwp_get_post_type_fields', array( $this, 'ajax_get_post_type_fields' ) );
-        add_action( 'wp_ajax_ytwp_save_settings', array( $this, 'ajax_save_settings' ) );
-        add_action( 'wp_ajax_ytwp_manual_sync', array( $this, 'ajax_manual_sync' ) );
-        add_action( 'wp_ajax_ytwp_sync_status', array( $this, 'ajax_sync_status' ) );
+        add_action( 'wp_ajax_ztube_validate_api_key', array( $this, 'ajax_validate_api_key' ) );
+        add_action( 'wp_ajax_ztube_search_channels', array( $this, 'ajax_search_channels' ) );
+        add_action( 'wp_ajax_ztube_get_playlists', array( $this, 'ajax_get_playlists' ) );
+        add_action( 'wp_ajax_ztube_get_post_type_fields', array( $this, 'ajax_get_post_type_fields' ) );
+        add_action( 'wp_ajax_ztube_save_settings', array( $this, 'ajax_save_settings' ) );
+        add_action( 'wp_ajax_ztube_manual_sync', array( $this, 'ajax_manual_sync' ) );
+        add_action( 'wp_ajax_ztube_sync_status', array( $this, 'ajax_sync_status' ) );
     }
 
     public function add_menu_pages() {
         add_menu_page(
-            __( 'YouTube to WP', 'yt-to-wp' ),
-            __( 'YouTube to WP', 'yt-to-wp' ),
+            __( 'ZymTube', 'zymtube' ),
+            __( 'ZymTube', 'zymtube' ),
             'manage_options',
-            'ytwp-settings',
+            'ztube-settings',
             array( $this, 'render_settings_page' ),
             'dashicons-youtube',
             30
         );
 
         add_submenu_page(
-            'ytwp-settings',
-            __( 'Sync Log', 'yt-to-wp' ),
-            __( 'Sync Log', 'yt-to-wp' ),
+            'ztube-settings',
+            __( 'Sync Log', 'zymtube' ),
+            __( 'Sync Log', 'zymtube' ),
             'manage_options',
-            'ytwp-sync-log',
+            'ztube-sync-log',
             array( $this, 'render_sync_log_page' )
         );
     }
 
     public function enqueue_assets( $hook ) {
-        if ( strpos( $hook, 'ytwp' ) === false ) {
+        if ( strpos( $hook, 'ztube' ) === false ) {
             return;
         }
 
         wp_enqueue_style(
-            'ytwp-admin',
-            YTWP_PLUGIN_URL . 'assets/css/admin.css',
+            'ztube-admin',
+            ZTUBE_PLUGIN_URL . 'assets/css/admin.css',
             array(),
-            YTWP_VERSION
+            ZTUBE_VERSION
         );
 
         wp_enqueue_script(
-            'ytwp-admin',
-            YTWP_PLUGIN_URL . 'assets/js/admin.js',
+            'ztube-admin',
+            ZTUBE_PLUGIN_URL . 'assets/js/admin.js',
             array( 'jquery' ),
-            YTWP_VERSION,
+            ZTUBE_VERSION,
             true
         );
 
-        wp_localize_script( 'ytwp-admin', 'ytwpAdmin', array(
+        wp_localize_script( 'ztube-admin', 'ztubeAdmin', array(
             'ajax_url' => admin_url( 'admin-ajax.php' ),
-            'nonce'    => wp_create_nonce( 'ytwp_nonce' ),
+            'nonce'    => wp_create_nonce( 'ztube_nonce' ),
         ) );
     }
 
@@ -83,93 +83,93 @@ class YTWP_Admin {
      * Main settings page.
      */
     public function render_settings_page() {
-        $settings = get_option( 'ytwp_settings', array() );
+        $settings = get_option( 'ztube_settings', array() );
 
         $post_types     = get_post_types( array( 'public' => true ), 'objects' );
         $cadence_options = array(
-            'every_5_min'  => __( 'Every 5 Minutes', 'yt-to-wp' ),
-            'every_15_min' => __( 'Every 15 Minutes', 'yt-to-wp' ),
-            'hourly'       => __( 'Hourly', 'yt-to-wp' ),
-            'twicedaily'   => __( 'Twice Daily', 'yt-to-wp' ),
-            'daily'        => __( 'Daily', 'yt-to-wp' ),
-            'weekly'       => __( 'Weekly', 'yt-to-wp' ),
-            'disabled'     => __( 'Disabled (Manual Only)', 'yt-to-wp' ),
+            'every_5_min'  => __( 'Every 5 Minutes', 'zymtube' ),
+            'every_15_min' => __( 'Every 15 Minutes', 'zymtube' ),
+            'hourly'       => __( 'Hourly', 'zymtube' ),
+            'twicedaily'   => __( 'Twice Daily', 'zymtube' ),
+            'daily'        => __( 'Daily', 'zymtube' ),
+            'weekly'       => __( 'Weekly', 'zymtube' ),
+            'disabled'     => __( 'Disabled (Manual Only)', 'zymtube' ),
         );
 
         // Available YouTube fields that can be mapped.
         $youtube_fields = array(
-            'video_url'      => __( 'Video URL (watch link)', 'yt-to-wp' ),
-            'embed_url'      => __( 'Embed URL', 'yt-to-wp' ),
-            'title'          => __( 'Video Title', 'yt-to-wp' ),
-            'description'    => __( 'Video Description', 'yt-to-wp' ),
-            'published_at'   => __( 'Published Date', 'yt-to-wp' ),
-            'channel_title'  => __( 'Channel Name', 'yt-to-wp' ),
-            'thumbnail_url'  => __( 'Thumbnail URL', 'yt-to-wp' ),
-            'duration'       => __( 'Duration', 'yt-to-wp' ),
-            'view_count'     => __( 'View Count', 'yt-to-wp' ),
-            'like_count'     => __( 'Like Count', 'yt-to-wp' ),
-            'comment_count'  => __( 'Comment Count', 'yt-to-wp' ),
-            'video_id'       => __( 'YouTube Video ID', 'yt-to-wp' ),
-            'transcript'     => __( 'Transcript', 'yt-to-wp' ),
+            'video_url'      => __( 'Video URL (watch link)', 'zymtube' ),
+            'embed_url'      => __( 'Embed URL', 'zymtube' ),
+            'title'          => __( 'Video Title', 'zymtube' ),
+            'description'    => __( 'Video Description', 'zymtube' ),
+            'published_at'   => __( 'Published Date', 'zymtube' ),
+            'channel_title'  => __( 'Channel Name', 'zymtube' ),
+            'thumbnail_url'  => __( 'Thumbnail URL', 'zymtube' ),
+            'duration'       => __( 'Duration', 'zymtube' ),
+            'view_count'     => __( 'View Count', 'zymtube' ),
+            'like_count'     => __( 'Like Count', 'zymtube' ),
+            'comment_count'  => __( 'Comment Count', 'zymtube' ),
+            'video_id'       => __( 'YouTube Video ID', 'zymtube' ),
+            'transcript'     => __( 'Transcript', 'zymtube' ),
         );
         ?>
-        <div class="wrap ytwp-wrap">
-            <h1><?php esc_html_e( 'YouTube Playlist to WordPress', 'yt-to-wp' ); ?></h1>
+        <div class="wrap ztube-wrap">
+            <h1><?php esc_html_e( 'ZymTube', 'zymtube' ); ?></h1>
 
-            <div class="ytwp-notices" id="ytwp-notices"></div>
+            <div class="ztube-notices" id="ztube-notices"></div>
 
-            <form id="ytwp-settings-form" method="post">
-                <?php wp_nonce_field( 'ytwp_nonce', 'ytwp_nonce_field' ); ?>
+            <form id="ztube-settings-form" method="post">
+                <?php wp_nonce_field( 'ztube_nonce', 'ztube_nonce_field' ); ?>
 
                 <!-- Section 1: API Key -->
-                <div class="ytwp-card">
-                    <h2><?php esc_html_e( '1. YouTube API Key', 'yt-to-wp' ); ?></h2>
-                    <p class="description"><?php esc_html_e( 'Enter your YouTube Data API v3 key. You can create one in the Google Cloud Console.', 'yt-to-wp' ); ?></p>
+                <div class="ztube-card">
+                    <h2><?php esc_html_e( '1. YouTube API Key', 'zymtube' ); ?></h2>
+                    <p class="description"><?php esc_html_e( 'Enter your YouTube Data API v3 key. You can create one in the Google Cloud Console.', 'zymtube' ); ?></p>
                     <table class="form-table">
                         <tr>
-                            <th><label for="ytwp_api_key"><?php esc_html_e( 'API Key', 'yt-to-wp' ); ?></label></th>
+                            <th><label for="ztube_api_key"><?php esc_html_e( 'API Key', 'zymtube' ); ?></label></th>
                             <td>
-                                <input type="text" id="ytwp_api_key" name="api_key"
+                                <input type="text" id="ztube_api_key" name="api_key"
                                        value="<?php echo esc_attr( isset( $settings['api_key'] ) ? $settings['api_key'] : '' ); ?>"
                                        class="regular-text" />
-                                <button type="button" id="ytwp-validate-key" class="button button-secondary">
-                                    <?php esc_html_e( 'Validate Key', 'yt-to-wp' ); ?>
+                                <button type="button" id="ztube-validate-key" class="button button-secondary">
+                                    <?php esc_html_e( 'Validate Key', 'zymtube' ); ?>
                                 </button>
-                                <span id="ytwp-key-status"></span>
+                                <span id="ztube-key-status"></span>
                             </td>
                         </tr>
                     </table>
                 </div>
 
                 <!-- Section 2: Channel & Playlist Selection -->
-                <div class="ytwp-card">
-                    <h2><?php esc_html_e( '2. Select YouTube Playlist', 'yt-to-wp' ); ?></h2>
+                <div class="ztube-card">
+                    <h2><?php esc_html_e( '2. Select YouTube Playlist', 'zymtube' ); ?></h2>
                     <table class="form-table">
                         <tr>
-                            <th><label for="ytwp_channel_search"><?php esc_html_e( 'Search Channel', 'yt-to-wp' ); ?></label></th>
+                            <th><label for="ztube_channel_search"><?php esc_html_e( 'Search Channel', 'zymtube' ); ?></label></th>
                             <td>
-                                <input type="text" id="ytwp_channel_search" class="regular-text"
-                                       placeholder="<?php esc_attr_e( 'Enter channel name...', 'yt-to-wp' ); ?>" />
-                                <button type="button" id="ytwp-search-channels" class="button button-secondary">
-                                    <?php esc_html_e( 'Search', 'yt-to-wp' ); ?>
+                                <input type="text" id="ztube_channel_search" class="regular-text"
+                                       placeholder="<?php esc_attr_e( 'Enter channel name...', 'zymtube' ); ?>" />
+                                <button type="button" id="ztube-search-channels" class="button button-secondary">
+                                    <?php esc_html_e( 'Search', 'zymtube' ); ?>
                                 </button>
-                                <div id="ytwp-channel-results" class="ytwp-results-list"></div>
+                                <div id="ztube-channel-results" class="ztube-results-list"></div>
                             </td>
                         </tr>
                         <tr>
-                            <th><label><?php esc_html_e( 'Or Enter Playlist ID Directly', 'yt-to-wp' ); ?></label></th>
+                            <th><label><?php esc_html_e( 'Or Enter Playlist ID Directly', 'zymtube' ); ?></label></th>
                             <td>
-                                <input type="text" id="ytwp_playlist_id" name="playlist_id"
+                                <input type="text" id="ztube_playlist_id" name="playlist_id"
                                        value="<?php echo esc_attr( isset( $settings['playlist_id'] ) ? $settings['playlist_id'] : '' ); ?>"
                                        class="regular-text"
-                                       placeholder="<?php esc_attr_e( 'PLxxxxxxxxxxxxxxxx', 'yt-to-wp' ); ?>" />
+                                       placeholder="<?php esc_attr_e( 'PLxxxxxxxxxxxxxxxx', 'zymtube' ); ?>" />
                             </td>
                         </tr>
-                        <tr id="ytwp-playlists-row" style="display:none;">
-                            <th><label><?php esc_html_e( 'Available Playlists', 'yt-to-wp' ); ?></label></th>
+                        <tr id="ztube-playlists-row" style="display:none;">
+                            <th><label><?php esc_html_e( 'Available Playlists', 'zymtube' ); ?></label></th>
                             <td>
-                                <select id="ytwp-playlists-select" class="regular-text">
-                                    <option value=""><?php esc_html_e( '— Select a playlist —', 'yt-to-wp' ); ?></option>
+                                <select id="ztube-playlists-select" class="regular-text">
+                                    <option value=""><?php esc_html_e( '— Select a playlist —', 'zymtube' ); ?></option>
                                 </select>
                             </td>
                         </tr>
@@ -177,13 +177,13 @@ class YTWP_Admin {
                 </div>
 
                 <!-- Section 3: Post Type & Field Mapping -->
-                <div class="ytwp-card">
-                    <h2><?php esc_html_e( '3. Post Type & Field Mapping', 'yt-to-wp' ); ?></h2>
+                <div class="ztube-card">
+                    <h2><?php esc_html_e( '3. Post Type & Field Mapping', 'zymtube' ); ?></h2>
                     <table class="form-table">
                         <tr>
-                            <th><label for="ytwp_post_type"><?php esc_html_e( 'Target Post Type', 'yt-to-wp' ); ?></label></th>
+                            <th><label for="ztube_post_type"><?php esc_html_e( 'Target Post Type', 'zymtube' ); ?></label></th>
                             <td>
-                                <select id="ytwp_post_type" name="post_type" class="regular-text">
+                                <select id="ztube_post_type" name="post_type" class="regular-text">
                                     <?php foreach ( $post_types as $pt ) : ?>
                                         <option value="<?php echo esc_attr( $pt->name ); ?>"
                                             <?php selected( isset( $settings['post_type'] ) ? $settings['post_type'] : 'post', $pt->name ); ?>>
@@ -191,85 +191,85 @@ class YTWP_Admin {
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <button type="button" id="ytwp-load-fields" class="button button-secondary">
-                                    <?php esc_html_e( 'Load Custom Fields', 'yt-to-wp' ); ?>
+                                <button type="button" id="ztube-load-fields" class="button button-secondary">
+                                    <?php esc_html_e( 'Load Custom Fields', 'zymtube' ); ?>
                                 </button>
                             </td>
                         </tr>
                         <tr>
-                            <th><label><?php esc_html_e( 'Video Description', 'yt-to-wp' ); ?></label></th>
+                            <th><label><?php esc_html_e( 'Video Description', 'zymtube' ); ?></label></th>
                             <td>
-                                <select id="ytwp_description_target" name="description_target" class="regular-text">
+                                <select id="ztube_description_target" name="description_target" class="regular-text">
                                     <option value="post_content" <?php selected( isset( $settings['description_target'] ) ? $settings['description_target'] : 'post_content', 'post_content' ); ?>>
-                                        <?php esc_html_e( 'Post Content (body)', 'yt-to-wp' ); ?>
+                                        <?php esc_html_e( 'Post Content (body)', 'zymtube' ); ?>
                                     </option>
                                     <option value="custom_field" <?php selected( isset( $settings['description_target'] ) ? $settings['description_target'] : '', 'custom_field' ); ?>>
-                                        <?php esc_html_e( 'Map to a custom field (select below)', 'yt-to-wp' ); ?>
+                                        <?php esc_html_e( 'Map to a custom field (select below)', 'zymtube' ); ?>
                                     </option>
                                 </select>
                             </td>
                         </tr>
                         <tr>
-                            <th><label><?php esc_html_e( 'Transcript', 'yt-to-wp' ); ?></label></th>
+                            <th><label><?php esc_html_e( 'Transcript', 'zymtube' ); ?></label></th>
                             <td>
-                                <select id="ytwp_transcript_target" name="transcript_target" class="regular-text">
+                                <select id="ztube_transcript_target" name="transcript_target" class="regular-text">
                                     <option value="" <?php selected( isset( $settings['transcript_target'] ) ? $settings['transcript_target'] : '', '' ); ?>>
-                                        <?php esc_html_e( '— Do not import —', 'yt-to-wp' ); ?>
+                                        <?php esc_html_e( '— Do not import —', 'zymtube' ); ?>
                                     </option>
                                     <option value="post_content" <?php selected( isset( $settings['transcript_target'] ) ? $settings['transcript_target'] : '', 'post_content' ); ?>>
-                                        <?php esc_html_e( 'Append to Post Content (body)', 'yt-to-wp' ); ?>
+                                        <?php esc_html_e( 'Append to Post Content (body)', 'zymtube' ); ?>
                                     </option>
                                     <option value="custom_field" <?php selected( isset( $settings['transcript_target'] ) ? $settings['transcript_target'] : '', 'custom_field' ); ?>>
-                                        <?php esc_html_e( 'Map to a custom field (select below)', 'yt-to-wp' ); ?>
+                                        <?php esc_html_e( 'Map to a custom field (select below)', 'zymtube' ); ?>
                                     </option>
                                 </select>
                             </td>
                         </tr>
                         <tr>
-                            <th><label><?php esc_html_e( 'Set Featured Image', 'yt-to-wp' ); ?></label></th>
+                            <th><label><?php esc_html_e( 'Set Featured Image', 'zymtube' ); ?></label></th>
                             <td>
                                 <label>
-                                    <input type="checkbox" id="ytwp_set_thumbnail" name="set_thumbnail" value="1"
+                                    <input type="checkbox" id="ztube_set_thumbnail" name="set_thumbnail" value="1"
                                         <?php checked( isset( $settings['set_thumbnail'] ) ? $settings['set_thumbnail'] : true ); ?> />
-                                    <?php esc_html_e( 'Download YouTube thumbnail and set as featured image', 'yt-to-wp' ); ?>
+                                    <?php esc_html_e( 'Download YouTube thumbnail and set as featured image', 'zymtube' ); ?>
                                 </label>
                             </td>
                         </tr>
                         <tr>
-                            <th><label><?php esc_html_e( 'Assign Keywords', 'yt-to-wp' ); ?></label></th>
+                            <th><label><?php esc_html_e( 'Assign Keywords', 'zymtube' ); ?></label></th>
                             <td>
                                 <label>
-                                    <input type="checkbox" id="ytwp_assign_keywords" name="assign_keywords" value="1"
+                                    <input type="checkbox" id="ztube_assign_keywords" name="assign_keywords" value="1"
                                         <?php checked( isset( $settings['assign_keywords'] ) ? $settings['assign_keywords'] : true ); ?> />
-                                    <?php esc_html_e( 'Import YouTube tags as post tags / keywords', 'yt-to-wp' ); ?>
+                                    <?php esc_html_e( 'Import YouTube tags as post tags / keywords', 'zymtube' ); ?>
                                 </label>
                             </td>
                         </tr>
                     </table>
 
-                    <h3><?php esc_html_e( 'Custom Field Mapping', 'yt-to-wp' ); ?></h3>
+                    <h3><?php esc_html_e( 'Custom Field Mapping', 'zymtube' ); ?></h3>
                     <p class="description">
-                        <?php esc_html_e( 'Map YouTube video data to custom fields on your chosen post type. Click "Load Custom Fields" above to populate available fields.', 'yt-to-wp' ); ?>
+                        <?php esc_html_e( 'Map YouTube video data to custom fields on your chosen post type. Click "Load Custom Fields" above to populate available fields.', 'zymtube' ); ?>
                     </p>
-                    <div id="ytwp-field-mapping-container">
-                        <table class="widefat ytwp-mapping-table" id="ytwp-mapping-table">
+                    <div id="ztube-field-mapping-container">
+                        <table class="widefat ztube-mapping-table" id="ztube-mapping-table">
                             <thead>
                                 <tr>
-                                    <th><?php esc_html_e( 'YouTube Data', 'yt-to-wp' ); ?></th>
-                                    <th><?php esc_html_e( 'WordPress Custom Field', 'yt-to-wp' ); ?></th>
-                                    <th><?php esc_html_e( 'Actions', 'yt-to-wp' ); ?></th>
+                                    <th><?php esc_html_e( 'YouTube Data', 'zymtube' ); ?></th>
+                                    <th><?php esc_html_e( 'WordPress Custom Field', 'zymtube' ); ?></th>
+                                    <th><?php esc_html_e( 'Actions', 'zymtube' ); ?></th>
                                 </tr>
                             </thead>
-                            <tbody id="ytwp-mapping-rows">
+                            <tbody id="ztube-mapping-rows">
                                 <?php
                                 $field_mapping = isset( $settings['field_mapping'] ) ? $settings['field_mapping'] : array();
                                 if ( ! empty( $field_mapping ) ) :
                                     foreach ( $field_mapping as $yt_field => $wp_field ) :
                                         ?>
-                                        <tr class="ytwp-mapping-row">
+                                        <tr class="ztube-mapping-row">
                                             <td>
-                                                <select name="yt_fields[]" class="regular-text ytwp-yt-field-select">
-                                                    <option value=""><?php esc_html_e( '— Select —', 'yt-to-wp' ); ?></option>
+                                                <select name="yt_fields[]" class="regular-text ztube-yt-field-select">
+                                                    <option value=""><?php esc_html_e( '— Select —', 'zymtube' ); ?></option>
                                                     <?php foreach ( $youtube_fields as $key => $label ) : ?>
                                                         <option value="<?php echo esc_attr( $key ); ?>" <?php selected( $yt_field, $key ); ?>>
                                                             <?php echo esc_html( $label ); ?>
@@ -279,13 +279,13 @@ class YTWP_Admin {
                                             </td>
                                             <td>
                                                 <input type="text" name="wp_fields[]" value="<?php echo esc_attr( $wp_field ); ?>"
-                                                       class="regular-text ytwp-wp-field-input"
-                                                       placeholder="<?php esc_attr_e( 'meta_key or select from loaded fields', 'yt-to-wp' ); ?>" />
-                                                <select class="regular-text ytwp-wp-field-select" style="display:none;">
-                                                    <option value=""><?php esc_html_e( '— Or choose detected field —', 'yt-to-wp' ); ?></option>
+                                                       class="regular-text ztube-wp-field-input"
+                                                       placeholder="<?php esc_attr_e( 'meta_key or select from loaded fields', 'zymtube' ); ?>" />
+                                                <select class="regular-text ztube-wp-field-select" style="display:none;">
+                                                    <option value=""><?php esc_html_e( '— Or choose detected field —', 'zymtube' ); ?></option>
                                                 </select>
                                             </td>
-                                            <td><button type="button" class="button ytwp-remove-row">&times;</button></td>
+                                            <td><button type="button" class="button ztube-remove-row">&times;</button></td>
                                         </tr>
                                         <?php
                                     endforeach;
@@ -294,18 +294,18 @@ class YTWP_Admin {
                             </tbody>
                         </table>
                         <p>
-                            <button type="button" id="ytwp-add-mapping" class="button button-secondary">
-                                <?php esc_html_e( '+ Add Field Mapping', 'yt-to-wp' ); ?>
+                            <button type="button" id="ztube-add-mapping" class="button button-secondary">
+                                <?php esc_html_e( '+ Add Field Mapping', 'zymtube' ); ?>
                             </button>
                         </p>
                     </div>
 
                     <!-- Hidden template row for JS cloning -->
-                    <script type="text/html" id="tmpl-ytwp-mapping-row">
-                        <tr class="ytwp-mapping-row">
+                    <script type="text/html" id="tmpl-ztube-mapping-row">
+                        <tr class="ztube-mapping-row">
                             <td>
-                                <select name="yt_fields[]" class="regular-text ytwp-yt-field-select">
-                                    <option value=""><?php esc_html_e( '— Select —', 'yt-to-wp' ); ?></option>
+                                <select name="yt_fields[]" class="regular-text ztube-yt-field-select">
+                                    <option value=""><?php esc_html_e( '— Select —', 'zymtube' ); ?></option>
                                     <?php foreach ( $youtube_fields as $key => $label ) : ?>
                                         <option value="<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $label ); ?></option>
                                     <?php endforeach; ?>
@@ -313,25 +313,25 @@ class YTWP_Admin {
                             </td>
                             <td>
                                 <input type="text" name="wp_fields[]" value=""
-                                       class="regular-text ytwp-wp-field-input"
-                                       placeholder="<?php esc_attr_e( 'meta_key or select from loaded fields', 'yt-to-wp' ); ?>" />
-                                <select class="regular-text ytwp-wp-field-select" style="display:none;">
-                                    <option value=""><?php esc_html_e( '— Or choose detected field —', 'yt-to-wp' ); ?></option>
+                                       class="regular-text ztube-wp-field-input"
+                                       placeholder="<?php esc_attr_e( 'meta_key or select from loaded fields', 'zymtube' ); ?>" />
+                                <select class="regular-text ztube-wp-field-select" style="display:none;">
+                                    <option value=""><?php esc_html_e( '— Or choose detected field —', 'zymtube' ); ?></option>
                                 </select>
                             </td>
-                            <td><button type="button" class="button ytwp-remove-row">&times;</button></td>
+                            <td><button type="button" class="button ztube-remove-row">&times;</button></td>
                         </tr>
                     </script>
                 </div>
 
                 <!-- Section 4: Sync Settings -->
-                <div class="ytwp-card">
-                    <h2><?php esc_html_e( '4. Sync Settings', 'yt-to-wp' ); ?></h2>
+                <div class="ztube-card">
+                    <h2><?php esc_html_e( '4. Sync Settings', 'zymtube' ); ?></h2>
                     <table class="form-table">
                         <tr>
-                            <th><label for="ytwp_sync_cadence"><?php esc_html_e( 'Auto-Sync Cadence', 'yt-to-wp' ); ?></label></th>
+                            <th><label for="ztube_sync_cadence"><?php esc_html_e( 'Auto-Sync Cadence', 'zymtube' ); ?></label></th>
                             <td>
-                                <select id="ytwp_sync_cadence" name="sync_cadence" class="regular-text">
+                                <select id="ztube_sync_cadence" name="sync_cadence" class="regular-text">
                                     <?php foreach ( $cadence_options as $val => $label ) : ?>
                                         <option value="<?php echo esc_attr( $val ); ?>"
                                             <?php selected( isset( $settings['sync_cadence'] ) ? $settings['sync_cadence'] : 'daily', $val ); ?>>
@@ -339,27 +339,27 @@ class YTWP_Admin {
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <p class="description"><?php esc_html_e( 'How often the plugin should check for new videos in the playlist.', 'yt-to-wp' ); ?></p>
+                                <p class="description"><?php esc_html_e( 'How often the plugin should check for new videos in the playlist.', 'zymtube' ); ?></p>
                             </td>
                         </tr>
                     </table>
                 </div>
 
                 <!-- Actions -->
-                <div class="ytwp-card ytwp-actions-card">
+                <div class="ztube-card ztube-actions-card">
                     <p class="submit">
-                        <button type="submit" id="ytwp-save-settings" class="button button-primary button-hero">
-                            <?php esc_html_e( 'Save Settings', 'yt-to-wp' ); ?>
+                        <button type="submit" id="ztube-save-settings" class="button button-primary button-hero">
+                            <?php esc_html_e( 'Save Settings', 'zymtube' ); ?>
                         </button>
-                        <button type="button" id="ytwp-manual-sync" class="button button-secondary button-hero">
-                            <?php esc_html_e( 'Sync All Videos Now', 'yt-to-wp' ); ?>
+                        <button type="button" id="ztube-manual-sync" class="button button-secondary button-hero">
+                            <?php esc_html_e( 'Sync All Videos Now', 'zymtube' ); ?>
                         </button>
                     </p>
-                    <div id="ytwp-sync-progress" style="display:none;">
-                        <div class="ytwp-progress-bar">
-                            <div class="ytwp-progress-bar-inner" id="ytwp-progress-inner" style="width:0%"></div>
+                    <div id="ztube-sync-progress" style="display:none;">
+                        <div class="ztube-progress-bar">
+                            <div class="ztube-progress-bar-inner" id="ztube-progress-inner" style="width:0%"></div>
                         </div>
-                        <p id="ytwp-sync-status-text"></p>
+                        <p id="ztube-sync-status-text"></p>
                     </div>
                 </div>
             </form>
@@ -371,22 +371,22 @@ class YTWP_Admin {
      * Sync log page.
      */
     public function render_sync_log_page() {
-        $log = get_option( 'ytwp_sync_log', array() );
+        $log = get_option( 'ztube_sync_log', array() );
         ?>
-        <div class="wrap ytwp-wrap">
-            <h1><?php esc_html_e( 'Sync Log', 'yt-to-wp' ); ?></h1>
+        <div class="wrap ztube-wrap">
+            <h1><?php esc_html_e( 'Sync Log', 'zymtube' ); ?></h1>
             <?php if ( empty( $log ) ) : ?>
-                <p><?php esc_html_e( 'No sync operations have been performed yet.', 'yt-to-wp' ); ?></p>
+                <p><?php esc_html_e( 'No sync operations have been performed yet.', 'zymtube' ); ?></p>
             <?php else : ?>
                 <table class="widefat striped">
                     <thead>
                         <tr>
-                            <th><?php esc_html_e( 'Date', 'yt-to-wp' ); ?></th>
-                            <th><?php esc_html_e( 'Type', 'yt-to-wp' ); ?></th>
-                            <th><?php esc_html_e( 'Videos Found', 'yt-to-wp' ); ?></th>
-                            <th><?php esc_html_e( 'Imported', 'yt-to-wp' ); ?></th>
-                            <th><?php esc_html_e( 'Skipped', 'yt-to-wp' ); ?></th>
-                            <th><?php esc_html_e( 'Errors', 'yt-to-wp' ); ?></th>
+                            <th><?php esc_html_e( 'Date', 'zymtube' ); ?></th>
+                            <th><?php esc_html_e( 'Type', 'zymtube' ); ?></th>
+                            <th><?php esc_html_e( 'Videos Found', 'zymtube' ); ?></th>
+                            <th><?php esc_html_e( 'Imported', 'zymtube' ); ?></th>
+                            <th><?php esc_html_e( 'Skipped', 'zymtube' ); ?></th>
+                            <th><?php esc_html_e( 'Errors', 'zymtube' ); ?></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -412,7 +412,7 @@ class YTWP_Admin {
      * ------------------------------------------------------------- */
 
     public function ajax_validate_api_key() {
-        check_ajax_referer( 'ytwp_nonce', 'nonce' );
+        check_ajax_referer( 'ztube_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized.' );
@@ -423,7 +423,7 @@ class YTWP_Admin {
             wp_send_json_error( 'Please enter an API key.' );
         }
 
-        $api = new YTWP_YouTube_API( $api_key );
+        $api = new ZTUBE_YouTube_API( $api_key );
         if ( $api->validate_key() ) {
             wp_send_json_success( 'API key is valid.' );
         } else {
@@ -432,7 +432,7 @@ class YTWP_Admin {
     }
 
     public function ajax_search_channels() {
-        check_ajax_referer( 'ytwp_nonce', 'nonce' );
+        check_ajax_referer( 'ztube_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized.' );
@@ -443,8 +443,8 @@ class YTWP_Admin {
             wp_send_json_error( 'Enter a search term.' );
         }
 
-        $settings = get_option( 'ytwp_settings', array() );
-        $api      = new YTWP_YouTube_API( $settings['api_key'] ?? '' );
+        $settings = get_option( 'ztube_settings', array() );
+        $api      = new ZTUBE_YouTube_API( $settings['api_key'] ?? '' );
         $channels = $api->search_channels( $query );
 
         if ( is_wp_error( $channels ) ) {
@@ -455,7 +455,7 @@ class YTWP_Admin {
     }
 
     public function ajax_get_playlists() {
-        check_ajax_referer( 'ytwp_nonce', 'nonce' );
+        check_ajax_referer( 'ztube_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized.' );
@@ -466,8 +466,8 @@ class YTWP_Admin {
             wp_send_json_error( 'No channel selected.' );
         }
 
-        $settings  = get_option( 'ytwp_settings', array() );
-        $api       = new YTWP_YouTube_API( $settings['api_key'] ?? '' );
+        $settings  = get_option( 'ztube_settings', array() );
+        $api       = new ZTUBE_YouTube_API( $settings['api_key'] ?? '' );
         $playlists = $api->get_channel_playlists( $channel_id );
 
         if ( is_wp_error( $playlists ) ) {
@@ -478,7 +478,7 @@ class YTWP_Admin {
     }
 
     public function ajax_get_post_type_fields() {
-        check_ajax_referer( 'ytwp_nonce', 'nonce' );
+        check_ajax_referer( 'ztube_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized.' );
@@ -492,7 +492,7 @@ class YTWP_Admin {
     }
 
     public function ajax_save_settings() {
-        check_ajax_referer( 'ytwp_nonce', 'nonce' );
+        check_ajax_referer( 'ztube_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized.' );
@@ -509,7 +509,7 @@ class YTWP_Admin {
             }
         }
 
-        $old_settings = get_option( 'ytwp_settings', array() );
+        $old_settings = get_option( 'ztube_settings', array() );
 
         $settings = array(
             'api_key'            => sanitize_text_field( wp_unslash( $_POST['api_key'] ?? '' ) ),
@@ -523,14 +523,14 @@ class YTWP_Admin {
             'assign_keywords'    => ! empty( $_POST['assign_keywords'] ),
         );
 
-        update_option( 'ytwp_settings', $settings );
+        update_option( 'ztube_settings', $settings );
 
         // Reschedule cron if cadence changed.
         $old_cadence = isset( $old_settings['sync_cadence'] ) ? $old_settings['sync_cadence'] : '';
         if ( $settings['sync_cadence'] !== $old_cadence ) {
-            YTWP_Cron::unschedule_sync();
+            ZTUBE_Cron::unschedule_sync();
             if ( 'disabled' !== $settings['sync_cadence'] ) {
-                YTWP_Cron::schedule_sync();
+                ZTUBE_Cron::schedule_sync();
             }
         }
 
@@ -538,13 +538,13 @@ class YTWP_Admin {
     }
 
     public function ajax_manual_sync() {
-        check_ajax_referer( 'ytwp_nonce', 'nonce' );
+        check_ajax_referer( 'ztube_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized.' );
         }
 
-        $engine = new YTWP_Sync_Engine();
+        $engine = new ZTUBE_Sync_Engine();
         $result = $engine->sync_all();
 
         if ( is_wp_error( $result ) ) {
@@ -555,9 +555,9 @@ class YTWP_Admin {
     }
 
     public function ajax_sync_status() {
-        check_ajax_referer( 'ytwp_nonce', 'nonce' );
+        check_ajax_referer( 'ztube_nonce', 'nonce' );
 
-        $status = get_transient( 'ytwp_sync_progress' );
+        $status = get_transient( 'ztube_sync_progress' );
         wp_send_json_success( $status ? $status : array( 'status' => 'idle' ) );
     }
 
