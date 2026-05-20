@@ -7,14 +7,14 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class ZTUBE_YouTube_API {
+class BLTT_YouTube_API {
 
     private $api_key;
     private $api_base = 'https://www.googleapis.com/youtube/v3';
 
     public function __construct( $api_key = '' ) {
         if ( empty( $api_key ) ) {
-            $settings      = get_option( 'ztube_settings', array() );
+            $settings      = get_option( 'bltt_settings', array() );
             $this->api_key = isset( $settings['api_key'] ) ? $settings['api_key'] : '';
         } else {
             $this->api_key = $api_key;
@@ -25,12 +25,6 @@ class ZTUBE_YouTube_API {
      * Validate that the API key works.
      */
     public function validate_key() {
-        $response = $this->request( '/channels', array(
-            'part' => 'snippet',
-            'mine' => 'true',
-            'maxResults' => 1,
-        ) );
-
         // For API-key-only auth we just test a known channel.
         $response = $this->request( '/channels', array(
             'part'       => 'snippet',
@@ -188,7 +182,6 @@ class ZTUBE_YouTube_API {
      * auto-generated and manually uploaded captions without OAuth.
      */
     public function get_transcript( $video_id, $lang = 'en' ) {
-        // First, get available caption tracks via the innertube-style captions list.
         $list_url = 'https://www.youtube.com/watch?v=' . urlencode( $video_id );
         $response = wp_remote_get( $list_url, array( 'timeout' => 15 ) );
 
@@ -198,25 +191,21 @@ class ZTUBE_YouTube_API {
 
         $body = wp_remote_retrieve_body( $response );
 
-        // Extract timedtext URL from page source.
         if ( preg_match( '/"captionTracks":\s*(\[.*?\])/', $body, $matches ) ) {
             $tracks = json_decode( $matches[1], true );
             if ( ! empty( $tracks ) ) {
                 $track_url = '';
-                // Try to find the requested language.
                 foreach ( $tracks as $track ) {
                     if ( isset( $track['languageCode'] ) && $track['languageCode'] === $lang ) {
                         $track_url = $track['baseUrl'];
                         break;
                     }
                 }
-                // Fall back to first available track.
                 if ( empty( $track_url ) && ! empty( $tracks[0]['baseUrl'] ) ) {
                     $track_url = $tracks[0]['baseUrl'];
                 }
 
                 if ( $track_url ) {
-                    // Append fmt=json3 for JSON output.
                     $track_url .= '&fmt=json3';
                     $caption_response = wp_remote_get( $track_url, array( 'timeout' => 15 ) );
 
@@ -284,7 +273,6 @@ class ZTUBE_YouTube_API {
         $snippet    = $item['snippet'];
         $thumbnails = $snippet['thumbnails'];
 
-        // Pick the best available thumbnail.
         $thumb_url = '';
         foreach ( array( 'maxres', 'standard', 'high', 'medium', 'default' ) as $size ) {
             if ( ! empty( $thumbnails[ $size ]['url'] ) ) {
