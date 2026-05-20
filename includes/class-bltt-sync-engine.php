@@ -7,14 +7,14 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class ZTUBE_Sync_Engine {
+class BLTT_Sync_Engine {
 
     private $settings;
     private $api;
 
     public function __construct() {
-        $this->settings = get_option( 'ztube_settings', array() );
-        $this->api      = new ZTUBE_YouTube_API();
+        $this->settings = get_option( 'bltt_settings', array() );
+        $this->api      = new BLTT_YouTube_API();
     }
 
     /**
@@ -65,7 +65,6 @@ class ZTUBE_Sync_Engine {
                 $pct
             );
 
-            // Skip if already imported.
             if ( $this->video_exists( $video['video_id'] ) ) {
                 $skipped++;
                 continue;
@@ -81,7 +80,6 @@ class ZTUBE_Sync_Engine {
 
         $this->update_progress( 'Sync complete.', 100 );
 
-        // Log the sync operation.
         $this->log_sync( $type, $total, $imported, $skipped, $errors );
 
         return array(
@@ -103,14 +101,12 @@ class ZTUBE_Sync_Engine {
         $assign_keywords = $this->settings['assign_keywords'] ?? true;
         $field_mapping   = $this->settings['field_mapping'] ?? array();
 
-        // Build post content.
         $post_content = '';
 
         if ( 'post_content' === $desc_target ) {
             $post_content .= wp_kses_post( $this->format_description( $video['description'] ) );
         }
 
-        // Fetch transcript if needed.
         $transcript = '';
         if ( ! empty( $trans_target ) || isset( $field_mapping['transcript'] ) ) {
             $transcript_result = $this->api->get_transcript( $video['video_id'] );
@@ -126,7 +122,6 @@ class ZTUBE_Sync_Engine {
             $post_content .= wp_kses_post( wpautop( $transcript ) );
         }
 
-        // Create the post.
         $post_data = array(
             'post_title'   => sanitize_text_field( $video['title'] ),
             'post_content' => $post_content,
@@ -141,10 +136,11 @@ class ZTUBE_Sync_Engine {
         }
 
         // Store the YouTube video ID as meta so we can detect duplicates.
+        // Legacy `_ztube_video_id` key is also written so older installs continue to dedupe.
+        update_post_meta( $post_id, '_bltt_video_id', $video['video_id'] );
+        update_post_meta( $post_id, '_bltt_video_url', $video['video_url'] );
         update_post_meta( $post_id, '_ztube_video_id', $video['video_id'] );
-        update_post_meta( $post_id, '_ztube_video_url', $video['video_url'] );
 
-        // Process field mapping.
         foreach ( $field_mapping as $yt_field => $wp_meta_key ) {
             $value = '';
             if ( 'transcript' === $yt_field ) {
@@ -160,20 +156,12 @@ class ZTUBE_Sync_Engine {
             }
         }
 
-        // Description to custom field if configured that way.
-        if ( 'custom_field' === $desc_target && isset( $field_mapping['description'] ) ) {
-            // Already handled above in field mapping loop.
-        }
-
-        // Transcript to custom field if configured.
         if ( 'custom_field' === $trans_target && ! empty( $transcript ) ) {
-            // Check if transcript is in the field mapping — if not, store in a default key.
             if ( ! isset( $field_mapping['transcript'] ) ) {
-                update_post_meta( $post_id, 'ztube_transcript', $transcript );
+                update_post_meta( $post_id, 'bltt_transcript', $transcript );
             }
         }
 
-        // Set featured image from YouTube thumbnail.
         if ( $set_thumbnail && ! empty( $video['thumbnail_url'] ) ) {
             $attach_id = $this->api->sideload_thumbnail(
                 $video['thumbnail_url'],
@@ -185,7 +173,6 @@ class ZTUBE_Sync_Engine {
             }
         }
 
-        // Assign YouTube tags as post tags / keywords.
         if ( $assign_keywords && ! empty( $video['tags'] ) ) {
             $this->assign_tags( $post_id, $video['tags'], $post_type );
         }
@@ -203,7 +190,6 @@ class ZTUBE_Sync_Engine {
         $taxonomy   = 'post_tag';
         $taxonomies = get_object_taxonomies( $post_type, 'objects' );
 
-        // Try to find a tag-like taxonomy for this post type.
         foreach ( $taxonomies as $tax_name => $tax_obj ) {
             if ( ! $tax_obj->hierarchical ) {
                 $taxonomy = $tax_name;
@@ -211,9 +197,7 @@ class ZTUBE_Sync_Engine {
             }
         }
 
-        // Only proceed if the taxonomy is registered for this post type.
         if ( ! in_array( $taxonomy, get_object_taxonomies( $post_type ), true ) ) {
-            // Register post_tag for this CPT temporarily.
             register_taxonomy_for_object_type( 'post_tag', $post_type );
             $taxonomy = 'post_tag';
         }
@@ -232,7 +216,7 @@ class ZTUBE_Sync_Engine {
             "SELECT pm.post_id
              FROM {$wpdb->postmeta} pm
              INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
-             WHERE pm.meta_key = '_ztube_video_id'
+             WHERE pm.meta_key IN ('_bltt_video_id', '_ztube_video_id')
              AND pm.meta_value = %s
              AND p.post_type = %s
              AND p.post_status != 'trash'
@@ -246,10 +230,8 @@ class ZTUBE_Sync_Engine {
 
     /**
      * Convert a YouTube description into formatted HTML.
-     * Converts URLs to links and preserves line breaks.
      */
     private function format_description( $text ) {
-        // Convert URLs to links.
         $text = preg_replace(
             '/(https?:\/\/[^\s<]+)/i',
             '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
@@ -259,22 +241,16 @@ class ZTUBE_Sync_Engine {
         return wpautop( $text );
     }
 
-    /**
-     * Update sync progress transient for AJAX polling.
-     */
     private function update_progress( $message, $percent ) {
-        set_transient( 'ztube_sync_progress', array(
+        set_transient( 'bltt_sync_progress', array(
             'status'  => 'running',
             'message' => $message,
             'percent' => $percent,
         ), 600 );
     }
 
-    /**
-     * Log a sync operation.
-     */
     private function log_sync( $type, $found, $imported, $skipped, $errors ) {
-        $log   = get_option( 'ztube_sync_log', array() );
+        $log   = get_option( 'bltt_sync_log', array() );
         $log[] = array(
             'date'     => current_time( 'Y-m-d H:i:s' ),
             'type'     => $type,
@@ -284,14 +260,12 @@ class ZTUBE_Sync_Engine {
             'errors'   => $errors,
         );
 
-        // Keep only the last 100 entries.
         if ( count( $log ) > 100 ) {
             $log = array_slice( $log, -100 );
         }
 
-        update_option( 'ztube_sync_log', $log );
+        update_option( 'bltt_sync_log', $log );
 
-        // Clear progress.
-        delete_transient( 'ztube_sync_progress' );
+        delete_transient( 'bltt_sync_progress' );
     }
 }
