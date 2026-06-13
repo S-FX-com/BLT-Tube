@@ -1,0 +1,14 @@
+{
+    "name": "s-fx-com/blt-tube",
+    "description": "Import YouTube playlist videos into WordPress",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "yahnis-elsts/plugin-update-checker": "^5.5"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    }
+}

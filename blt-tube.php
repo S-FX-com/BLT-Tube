@@ -21,6 +21,20 @@ define( 'BLTT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BLTT_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'BLTT_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
+// Bootstrap the update checker when the vendored library is present (release builds).
+if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
+    require_once __DIR__ . '/vendor/autoload.php';
+
+    $bltt_update_checker = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+        'https://github.com/s-fx-com/blt-tube/',
+        __FILE__,
+        'blt-tube'
+    );
+    // Fetch the zip attached to each GitHub release instead of the raw source archive.
+    $bltt_update_checker->getVcsApi()->enableReleaseAssets();
+    unset( $bltt_update_checker );
+}
+
 require_once BLTT_PLUGIN_DIR . 'includes/class-bltt-youtube-api.php';
 require_once BLTT_PLUGIN_DIR . 'includes/class-bltt-admin.php';
 require_once BLTT_PLUGIN_DIR . 'includes/class-bltt-sync-engine.php';
