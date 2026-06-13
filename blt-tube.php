@@ -4,7 +4,7 @@
  * Plugin URI:  https://github.com/s-fx-com/blt-tube
  * Description: Import YouTube playlist videos into any WordPress Custom Post Type with full field mapping, thumbnails, transcripts, and scheduled sync. Includes a shortcode for embedding playlists.
  * Version:     1.1.0
- * Author:      Obie
+ * Author:      S-FX.com Small Business Solutions
  * License:     GPL-2.0-or-later
  * Text Domain: blt-tube
  * Requires at least: 6.5
