@@ -634,7 +634,12 @@ class BLTT_Admin {
     private function discover_custom_fields( $post_type ) {
         global $wpdb;
 
-        $fields = array();
+        // Native WordPress post fields always appear at the top of the list.
+        $fields = array(
+            'post_title'      => __( 'Post Title (post_title)', 'blt-tube' ),
+            'post_excerpt'    => __( 'Post Excerpt (post_excerpt)', 'blt-tube' ),
+            '_featured_image' => __( 'Featured Image — download & set thumbnail (_featured_image)', 'blt-tube' ),
+        );
 
         $meta_keys = $wpdb->get_col( $wpdb->prepare(
             "SELECT DISTINCT pm.meta_key
