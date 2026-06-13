@@ -45,6 +45,27 @@
     color: #d63638;
 }
 
+/* Sync time picker */
+.bltt-sync-time-inner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.bltt-sync-time-inner select {
+    margin: 0;
+}
+
+#bltt-sync-at-word {
+    color: #50575e;
+}
+
+#bltt-sync-colon {
+    color: #50575e;
+    font-weight: 600;
+}
+
 /* Channel search results */
 .bltt-results-list {
     margin-top: 10px;
