@@ -49,7 +49,7 @@ class BLTT_Cron {
 
     public function run_sync() {
         $engine = new BLTT_Sync_Engine();
-        $engine->sync_all( 'cron' );
+        $engine->sync_updates( 'cron' );
     }
 
     public static function schedule_sync() {
