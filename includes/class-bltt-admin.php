@@ -488,11 +488,13 @@ class BLTT_Admin {
             wp_send_json_error( 'Please enter an API key.' );
         }
 
-        $api = new BLTT_YouTube_API( $api_key );
-        if ( $api->validate_key() ) {
+        $api    = new BLTT_YouTube_API( $api_key );
+        $result = $api->validate_key();
+
+        if ( true === $result ) {
             wp_send_json_success( 'API key is valid.' );
         } else {
-            wp_send_json_error( 'API key validation failed. Please check the key and ensure the YouTube Data API v3 is enabled.' );
+            wp_send_json_error( $result->get_error_message() );
         }
     }
 
