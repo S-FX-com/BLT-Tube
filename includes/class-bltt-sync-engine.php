@@ -141,7 +141,10 @@ class BLTT_Sync_Engine {
         update_post_meta( $post_id, '_bltt_video_url', $video['video_url'] );
         update_post_meta( $post_id, '_ztube_video_id', $video['video_id'] );
 
-        foreach ( $field_mapping as $yt_field => $wp_meta_key ) {
+        $native_post_fields = array( 'post_title', 'post_content', 'post_excerpt' );
+        $post_field_updates = array();
+
+        foreach ( $field_mapping as $yt_field => $wp_target ) {
             $value = '';
             if ( 'transcript' === $yt_field ) {
                 $value = $transcript;
@@ -151,9 +154,27 @@ class BLTT_Sync_Engine {
                     $value = implode( ', ', $value );
                 }
             }
-            if ( '' !== $value ) {
-                update_post_meta( $post_id, $wp_meta_key, $value );
+
+            if ( '' === $value ) {
+                continue;
             }
+
+            if ( '_featured_image' === $wp_target ) {
+                // Treat the value as an image URL — sideload and set as thumbnail.
+                $attach_id = $this->api->sideload_thumbnail( $value, $post_id, $video['title'] );
+                if ( ! is_wp_error( $attach_id ) ) {
+                    set_post_thumbnail( $post_id, $attach_id );
+                }
+            } elseif ( in_array( $wp_target, $native_post_fields, true ) ) {
+                $post_field_updates[ $wp_target ] = $value;
+            } else {
+                update_post_meta( $post_id, $wp_target, $value );
+            }
+        }
+
+        if ( ! empty( $post_field_updates ) ) {
+            $post_field_updates['ID'] = $post_id;
+            wp_update_post( $post_field_updates );
         }
 
         if ( 'custom_field' === $trans_target && ! empty( $transcript ) ) {
