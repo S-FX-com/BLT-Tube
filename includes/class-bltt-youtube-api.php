@@ -23,16 +23,24 @@ class BLTT_YouTube_API {
 
     /**
      * Validate that the API key works.
+     *
+     * Returns true on success or a WP_Error with the API's own message on failure,
+     * so callers can surface actionable feedback to the user.
      */
     public function validate_key() {
-        // For API-key-only auth we just test a known channel.
-        $response = $this->request( '/channels', array(
-            'part'       => 'snippet',
-            'forHandle'  => '@YouTube',
+        // videos?part=id&id=<known video> is the lightest possible quota-safe call
+        // and works regardless of how new the API key configuration is.
+        $response = $this->request( '/videos', array(
+            'part'       => 'id',
+            'id'         => 'dQw4w9WgXcQ',
             'maxResults' => 1,
         ) );
 
-        return ! is_wp_error( $response );
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        return true;
     }
 
     /**
@@ -308,7 +316,11 @@ class BLTT_YouTube_API {
 
         $url = $this->api_base . $endpoint . '?' . http_build_query( $params );
 
-        $response = wp_remote_get( $url, array( 'timeout' => 30 ) );
+        $response = wp_remote_get( $url, array(
+            'timeout' => 30,
+            // Send the site URL as Referer so keys restricted to this domain are accepted.
+            'headers' => array( 'Referer' => home_url( '/' ) ),
+        ) );
 
         if ( is_wp_error( $response ) ) {
             return $response;
