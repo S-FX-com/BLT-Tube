@@ -27,7 +27,9 @@ class BLTT_Admin {
         add_action( 'wp_ajax_bltt_get_playlists', array( $this, 'ajax_get_playlists' ) );
         add_action( 'wp_ajax_bltt_get_post_type_fields', array( $this, 'ajax_get_post_type_fields' ) );
         add_action( 'wp_ajax_bltt_save_settings', array( $this, 'ajax_save_settings' ) );
-        add_action( 'wp_ajax_bltt_manual_sync', array( $this, 'ajax_manual_sync' ) );
+        add_action( 'wp_ajax_bltt_preview_playlist', array( $this, 'ajax_preview_playlist' ) );
+        add_action( 'wp_ajax_bltt_import_selected', array( $this, 'ajax_import_selected' ) );
+        add_action( 'wp_ajax_bltt_sync_updates', array( $this, 'ajax_sync_updates' ) );
         add_action( 'wp_ajax_bltt_sync_status', array( $this, 'ajax_sync_status' ) );
     }
 
@@ -416,24 +418,68 @@ class BLTT_Admin {
                     </table>
                 </div>
 
-                <!-- Actions -->
+                <!-- Save Settings -->
                 <div class="bltt-card bltt-actions-card">
                     <p class="submit">
                         <button type="submit" id="bltt-save-settings" class="button button-primary button-hero">
                             <?php esc_html_e( 'Save Settings', 'blt-tube' ); ?>
                         </button>
-                        <button type="button" id="bltt-manual-sync" class="button button-secondary button-hero">
-                            <?php esc_html_e( 'Sync All Videos Now', 'blt-tube' ); ?>
-                        </button>
                     </p>
-                    <div id="bltt-sync-progress" style="display:none;">
-                        <div class="bltt-progress-bar">
-                            <div class="bltt-progress-bar-inner" id="bltt-progress-inner" style="width:0%"></div>
-                        </div>
-                        <p id="bltt-sync-status-text"></p>
-                    </div>
                 </div>
             </form>
+
+            <!-- Section 5: Import & Sync — outside the form so its buttons don't submit it -->
+            <div class="bltt-card" id="bltt-import-card">
+                <h2><?php esc_html_e( '5. Import &amp; Sync Videos', 'blt-tube' ); ?></h2>
+                <p class="description">
+                    <?php esc_html_e( 'Load your playlist to preview all videos and choose which ones to import as posts. Use "Sync Existing Posts" to refresh already-imported posts with the latest data from YouTube.', 'blt-tube' ); ?>
+                </p>
+                <p style="margin-top:12px;">
+                    <button type="button" id="bltt-load-playlist" class="button button-primary">
+                        <?php esc_html_e( 'Load Playlist Videos', 'blt-tube' ); ?>
+                    </button>
+                    &nbsp;
+                    <button type="button" id="bltt-sync-updates" class="button button-secondary">
+                        <?php esc_html_e( 'Sync Existing Posts', 'blt-tube' ); ?>
+                    </button>
+                </p>
+
+                <!-- Shared progress bar -->
+                <div id="bltt-sync-progress" style="display:none; margin-top:12px;">
+                    <div class="bltt-progress-bar">
+                        <div class="bltt-progress-bar-inner" id="bltt-progress-inner" style="width:0%"></div>
+                    </div>
+                    <p id="bltt-sync-status-text"></p>
+                </div>
+
+                <!-- Preview table (populated after Load Playlist) -->
+                <div id="bltt-preview-wrap" style="display:none; margin-top:20px;">
+                    <p id="bltt-preview-summary"></p>
+                    <p>
+                        <label style="margin-right:14px;">
+                            <input type="checkbox" id="bltt-select-all" checked />
+                            <?php esc_html_e( 'Select / Deselect All', 'blt-tube' ); ?>
+                        </label>
+                        <button type="button" id="bltt-import-selected" class="button button-primary" disabled>
+                            <?php esc_html_e( 'Import Selected', 'blt-tube' ); ?>
+                        </button>
+                    </p>
+                    <table class="widefat striped" id="bltt-preview-table">
+                        <thead>
+                            <tr>
+                                <th style="width:32px;"></th>
+                                <th style="width:84px;"><?php esc_html_e( 'Thumbnail', 'blt-tube' ); ?></th>
+                                <th><?php esc_html_e( 'Title', 'blt-tube' ); ?></th>
+                                <th style="width:72px;"><?php esc_html_e( 'Duration', 'blt-tube' ); ?></th>
+                                <th style="width:110px;"><?php esc_html_e( 'Published', 'blt-tube' ); ?></th>
+                                <th style="width:110px;"><?php esc_html_e( 'Status', 'blt-tube' ); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody id="bltt-preview-rows"></tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
         <?php
     }
@@ -674,7 +720,7 @@ class BLTT_Admin {
         wp_send_json_success( 'Settings saved.' );
     }
 
-    public function ajax_manual_sync() {
+    public function ajax_preview_playlist() {
         check_ajax_referer( 'bltt_nonce', 'nonce' );
 
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -682,7 +728,49 @@ class BLTT_Admin {
         }
 
         $engine = new BLTT_Sync_Engine();
-        $result = $engine->sync_all();
+        $result = $engine->preview_playlist();
+
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+
+        wp_send_json_success( $result );
+    }
+
+    public function ajax_import_selected() {
+        check_ajax_referer( 'bltt_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized.' );
+        }
+
+        $video_ids = isset( $_POST['video_ids'] )
+            ? array_map( 'sanitize_text_field', wp_unslash( (array) $_POST['video_ids'] ) )
+            : array();
+
+        if ( empty( $video_ids ) ) {
+            wp_send_json_error( 'No videos selected.' );
+        }
+
+        $engine = new BLTT_Sync_Engine();
+        $result = $engine->import_selected( $video_ids );
+
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( $result->get_error_message() );
+        }
+
+        wp_send_json_success( $result );
+    }
+
+    public function ajax_sync_updates() {
+        check_ajax_referer( 'bltt_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized.' );
+        }
+
+        $engine = new BLTT_Sync_Engine();
+        $result = $engine->sync_updates( 'manual' );
 
         if ( is_wp_error( $result ) ) {
             wp_send_json_error( $result->get_error_message() );

@@ -18,18 +18,16 @@ class BLTT_Sync_Engine {
     }
 
     /**
-     * Sync all videos from the configured playlist.
+     * Fetch every video in the configured playlist and return its details plus
+     * whether it has already been imported, without writing anything to the DB.
      *
-     * @param string $type 'manual' or 'cron'.
-     * @return array|WP_Error  Sync result summary.
+     * @return array|WP_Error
      */
-    public function sync_all( $type = 'manual' ) {
+    public function preview_playlist() {
         $playlist_id = $this->settings['playlist_id'] ?? '';
         if ( empty( $playlist_id ) ) {
             return new WP_Error( 'no_playlist', 'No playlist configured. Please save settings first.' );
         }
-
-        $this->update_progress( 'Fetching playlist videos...', 0 );
 
         $video_ids = $this->api->get_playlist_video_ids( $playlist_id );
         if ( is_wp_error( $video_ids ) ) {
@@ -37,16 +35,50 @@ class BLTT_Sync_Engine {
         }
 
         if ( empty( $video_ids ) ) {
-            $this->update_progress( 'No videos found in playlist.', 100 );
-            return array(
-                'found'    => 0,
-                'imported' => 0,
-                'skipped'  => 0,
-                'errors'   => 0,
+            return array( 'videos' => array(), 'total' => 0, 'unsynced' => 0 );
+        }
+
+        $videos = $this->api->get_videos( $video_ids );
+        if ( is_wp_error( $videos ) ) {
+            return $videos;
+        }
+
+        $results = array();
+        foreach ( $videos as $video ) {
+            $results[] = array(
+                'video_id'     => $video['video_id'],
+                'title'        => $video['title'],
+                'thumbnail'    => $video['thumbnail_url'],
+                'duration'     => $video['duration'],
+                'published_at' => $video['published_at'],
+                'channel'      => $video['channel_title'],
+                'synced'       => $this->video_exists( $video['video_id'] ),
             );
         }
 
-        $this->update_progress( sprintf( 'Found %d videos. Fetching details...', count( $video_ids ) ), 5 );
+        $unsynced = count( array_filter( $results, function ( $v ) {
+            return ! $v['synced'];
+        } ) );
+
+        return array(
+            'videos'   => $results,
+            'total'    => count( $results ),
+            'unsynced' => $unsynced,
+        );
+    }
+
+    /**
+     * Import a specific set of video IDs chosen by the user.
+     *
+     * @param string[] $video_ids
+     * @return array|WP_Error
+     */
+    public function import_selected( array $video_ids ) {
+        if ( empty( $video_ids ) ) {
+            return new WP_Error( 'no_videos', 'No video IDs provided.' );
+        }
+
+        $this->update_progress( 'Fetching video details…', 0 );
 
         $videos = $this->api->get_videos( $video_ids );
         if ( is_wp_error( $videos ) ) {
@@ -61,7 +93,7 @@ class BLTT_Sync_Engine {
         foreach ( $videos as $index => $video ) {
             $pct = intval( ( ( $index + 1 ) / $total ) * 90 ) + 10;
             $this->update_progress(
-                sprintf( 'Processing %d / %d: %s', $index + 1, $total, $video['title'] ),
+                sprintf( 'Importing %d / %d: %s', $index + 1, $total, $video['title'] ),
                 $pct
             );
 
@@ -78,9 +110,8 @@ class BLTT_Sync_Engine {
             }
         }
 
-        $this->update_progress( 'Sync complete.', 100 );
-
-        $this->log_sync( $type, $total, $imported, $skipped, $errors );
+        $this->update_progress( 'Import complete.', 100 );
+        $this->log_sync( 'selected', $total, $imported, $skipped, $errors );
 
         return array(
             'found'    => $total,
@@ -91,7 +122,85 @@ class BLTT_Sync_Engine {
     }
 
     /**
-     * Import a single video as a post.
+     * Update all previously-imported posts with the latest data from YouTube.
+     * Only touches posts that already have a _bltt_video_id meta value.
+     *
+     * @param string $type  'cron' or 'manual'
+     * @return array|WP_Error
+     */
+    public function sync_updates( $type = 'manual' ) {
+        global $wpdb;
+
+        $post_type = $this->settings['post_type'] ?? 'post';
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT pm.post_id, pm.meta_value AS video_id
+             FROM {$wpdb->postmeta} pm
+             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE pm.meta_key = '_bltt_video_id'
+             AND p.post_type = %s
+             AND p.post_status != 'trash'",
+            $post_type
+        ) );
+
+        if ( empty( $rows ) ) {
+            $this->log_sync( $type, 0, 0, 0, 0 );
+            return array(
+                'found'   => 0,
+                'updated' => 0,
+                'errors'  => 0,
+                'message' => 'No previously imported posts found.',
+            );
+        }
+
+        $this->update_progress( 'Fetching current video details from YouTube…', 0 );
+
+        $video_id_to_post = array();
+        foreach ( $rows as $row ) {
+            $video_id_to_post[ $row->video_id ] = (int) $row->post_id;
+        }
+
+        $videos = $this->api->get_videos( array_keys( $video_id_to_post ) );
+        if ( is_wp_error( $videos ) ) {
+            return $videos;
+        }
+
+        $total   = count( $videos );
+        $updated = 0;
+        $errors  = 0;
+
+        foreach ( $videos as $index => $video ) {
+            $pct = intval( ( ( $index + 1 ) / $total ) * 90 ) + 10;
+            $this->update_progress(
+                sprintf( 'Updating %d / %d: %s', $index + 1, $total, $video['title'] ),
+                $pct
+            );
+
+            $post_id = $video_id_to_post[ $video['video_id'] ] ?? null;
+            if ( ! $post_id ) {
+                continue;
+            }
+
+            $result = $this->update_post_from_video( $post_id, $video );
+            if ( is_wp_error( $result ) ) {
+                $errors++;
+            } else {
+                $updated++;
+            }
+        }
+
+        $this->update_progress( 'Sync complete.', 100 );
+        $this->log_sync( $type, $total, $updated, 0, $errors );
+
+        return array(
+            'found'   => $total,
+            'updated' => $updated,
+            'errors'  => $errors,
+        );
+    }
+
+    /**
+     * Create a new post for a single video.
      */
     private function import_video( $video ) {
         $post_type       = $this->settings['post_type'] ?? 'post';
@@ -102,7 +211,6 @@ class BLTT_Sync_Engine {
         $field_mapping   = $this->settings['field_mapping'] ?? array();
 
         $post_content = '';
-
         if ( 'post_content' === $desc_target ) {
             $post_content .= wp_kses_post( $this->format_description( $video['description'] ) );
         }
@@ -135,12 +243,107 @@ class BLTT_Sync_Engine {
             return $post_id;
         }
 
-        // Store the YouTube video ID as meta so we can detect duplicates.
-        // Legacy `_ztube_video_id` key is also written so older installs continue to dedupe.
         update_post_meta( $post_id, '_bltt_video_id', $video['video_id'] );
         update_post_meta( $post_id, '_bltt_video_url', $video['video_url'] );
         update_post_meta( $post_id, '_ztube_video_id', $video['video_id'] );
 
+        $this->apply_field_mapping( $post_id, $video, $transcript, true );
+
+        if ( $set_thumbnail && ! isset( $field_mapping['thumbnail_url'] ) && ! empty( $video['thumbnail_url'] ) ) {
+            $attach_id = $this->api->sideload_thumbnail( $video['thumbnail_url'], $post_id, $video['title'] );
+            if ( ! is_wp_error( $attach_id ) ) {
+                set_post_thumbnail( $post_id, $attach_id );
+            }
+        }
+
+        if ( 'custom_field' === $trans_target && ! empty( $transcript ) ) {
+            if ( ! isset( $field_mapping['transcript'] ) ) {
+                update_post_meta( $post_id, 'bltt_transcript', $transcript );
+            }
+        }
+
+        if ( $assign_keywords && ! empty( $video['tags'] ) ) {
+            $this->assign_tags( $post_id, $video['tags'], $post_type );
+        }
+
+        return $post_id;
+    }
+
+    /**
+     * Update an existing post with the latest YouTube data.
+     * Does not overwrite a featured image that has already been set.
+     */
+    private function update_post_from_video( $post_id, $video ) {
+        $desc_target     = $this->settings['description_target'] ?? 'post_content';
+        $trans_target    = $this->settings['transcript_target'] ?? '';
+        $set_thumbnail   = $this->settings['set_thumbnail'] ?? true;
+        $assign_keywords = $this->settings['assign_keywords'] ?? true;
+        $field_mapping   = $this->settings['field_mapping'] ?? array();
+        $post_type       = $this->settings['post_type'] ?? 'post';
+
+        $post_content = '';
+        if ( 'post_content' === $desc_target ) {
+            $post_content = wp_kses_post( $this->format_description( $video['description'] ) );
+        }
+
+        $transcript = '';
+        if ( ! empty( $trans_target ) || isset( $field_mapping['transcript'] ) ) {
+            $transcript_result = $this->api->get_transcript( $video['video_id'] );
+            if ( ! is_wp_error( $transcript_result ) ) {
+                $transcript = $transcript_result;
+            }
+        }
+
+        if ( 'post_content' === $trans_target && ! empty( $transcript ) ) {
+            if ( ! empty( $post_content ) ) {
+                $post_content .= "\n\n<h2>Transcript</h2>\n\n";
+            }
+            $post_content .= wp_kses_post( wpautop( $transcript ) );
+        }
+
+        wp_update_post( array(
+            'ID'           => $post_id,
+            'post_title'   => sanitize_text_field( $video['title'] ),
+            'post_content' => $post_content,
+        ) );
+
+        update_post_meta( $post_id, '_bltt_video_url', $video['video_url'] );
+
+        $this->apply_field_mapping( $post_id, $video, $transcript, false );
+
+        // Only set a featured image if the post doesn't already have one.
+        if ( $set_thumbnail && ! get_post_thumbnail_id( $post_id )
+            && ! isset( $field_mapping['thumbnail_url'] )
+            && ! empty( $video['thumbnail_url'] ) ) {
+            $attach_id = $this->api->sideload_thumbnail( $video['thumbnail_url'], $post_id, $video['title'] );
+            if ( ! is_wp_error( $attach_id ) ) {
+                set_post_thumbnail( $post_id, $attach_id );
+            }
+        }
+
+        if ( 'custom_field' === $trans_target && ! empty( $transcript ) ) {
+            if ( ! isset( $field_mapping['transcript'] ) ) {
+                update_post_meta( $post_id, 'bltt_transcript', $transcript );
+            }
+        }
+
+        if ( $assign_keywords && ! empty( $video['tags'] ) ) {
+            $this->assign_tags( $post_id, $video['tags'], $post_type );
+        }
+
+        return $post_id;
+    }
+
+    /**
+     * Apply the user-configured field mapping to a post.
+     *
+     * @param int    $post_id
+     * @param array  $video
+     * @param string $transcript
+     * @param bool   $allow_thumbnail_sideload  True on first import; false when updating (avoid duplicate uploads).
+     */
+    private function apply_field_mapping( $post_id, $video, $transcript, $allow_thumbnail_sideload ) {
+        $field_mapping      = $this->settings['field_mapping'] ?? array();
         $native_post_fields = array( 'post_title', 'post_content', 'post_excerpt' );
         $post_field_updates = array();
 
@@ -160,10 +363,11 @@ class BLTT_Sync_Engine {
             }
 
             if ( '_featured_image' === $wp_target ) {
-                // Treat the value as an image URL — sideload and set as thumbnail.
-                $attach_id = $this->api->sideload_thumbnail( $value, $post_id, $video['title'] );
-                if ( ! is_wp_error( $attach_id ) ) {
-                    set_post_thumbnail( $post_id, $attach_id );
+                if ( $allow_thumbnail_sideload || ! get_post_thumbnail_id( $post_id ) ) {
+                    $attach_id = $this->api->sideload_thumbnail( $value, $post_id, $video['title'] );
+                    if ( ! is_wp_error( $attach_id ) ) {
+                        set_post_thumbnail( $post_id, $attach_id );
+                    }
                 }
             } elseif ( in_array( $wp_target, $native_post_fields, true ) ) {
                 $post_field_updates[ $wp_target ] = $value;
@@ -176,36 +380,10 @@ class BLTT_Sync_Engine {
             $post_field_updates['ID'] = $post_id;
             wp_update_post( $post_field_updates );
         }
-
-        if ( 'custom_field' === $trans_target && ! empty( $transcript ) ) {
-            if ( ! isset( $field_mapping['transcript'] ) ) {
-                update_post_meta( $post_id, 'bltt_transcript', $transcript );
-            }
-        }
-
-        if ( $set_thumbnail && ! empty( $video['thumbnail_url'] ) ) {
-            $attach_id = $this->api->sideload_thumbnail(
-                $video['thumbnail_url'],
-                $post_id,
-                $video['title']
-            );
-            if ( ! is_wp_error( $attach_id ) ) {
-                set_post_thumbnail( $post_id, $attach_id );
-            }
-        }
-
-        if ( $assign_keywords && ! empty( $video['tags'] ) ) {
-            $this->assign_tags( $post_id, $video['tags'], $post_type );
-        }
-
-        return $post_id;
     }
 
     /**
      * Assign tags/keywords to a post.
-     *
-     * For 'post' post type, uses the built-in 'post_tag' taxonomy.
-     * For custom post types, looks for an associated taxonomy or falls back to post_tag.
      */
     private function assign_tags( $post_id, $tags, $post_type ) {
         $taxonomy   = 'post_tag';
@@ -258,7 +436,6 @@ class BLTT_Sync_Engine {
             '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
             $text
         );
-
         return wpautop( $text );
     }
 
@@ -286,7 +463,6 @@ class BLTT_Sync_Engine {
         }
 
         update_option( 'bltt_sync_log', $log );
-
         delete_transient( 'bltt_sync_progress' );
     }
 }
