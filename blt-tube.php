@@ -3,7 +3,7 @@
  * Plugin Name: BLT Tube
  * Plugin URI:  https://github.com/s-fx-com/blt-tube
  * Description: Import YouTube playlist videos into any WordPress Custom Post Type with full field mapping, thumbnails, transcripts, and scheduled sync. Includes a shortcode for embedding playlists.
- * Version:     1.2.0
+ * Version:     1.3.0
  * Author:      S-FX.com Small Business Solutions
  * License:     GPL-2.0-or-later
  * Text Domain: blt-tube
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BLTT_VERSION', '1.2.0' );
+define( 'BLTT_VERSION', '1.3.0' );
 define( 'BLTT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BLTT_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'BLTT_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -78,6 +78,9 @@ final class BLT_Tube {
                 'post_type'          => 'post',
                 'field_mapping'      => array(),
                 'sync_cadence'       => 'daily',
+                'sync_hour'          => 3,
+                'sync_minute'        => 0,
+                'sync_weekday'       => 1,
                 'description_target' => 'post_content',
                 'transcript_target'  => '',
                 'assign_keywords'    => true,

@@ -95,6 +95,10 @@ class BLTT_Admin {
     public function render_settings_page() {
         $settings = get_option( 'bltt_settings', array() );
 
+        $sync_hour    = isset( $settings['sync_hour'] )    ? (int) $settings['sync_hour']    : 3;
+        $sync_minute  = isset( $settings['sync_minute'] )  ? (int) $settings['sync_minute']  : 0;
+        $sync_weekday = isset( $settings['sync_weekday'] ) ? (int) $settings['sync_weekday'] : 1;
+
         $post_types     = get_post_types( array( 'public' => true ), 'objects' );
         $cadence_options = array(
             'every_5_min'  => __( 'Every 5 Minutes', 'blt-tube' ),
@@ -351,6 +355,64 @@ class BLTT_Admin {
                                     <?php endforeach; ?>
                                 </select>
                                 <p class="description"><?php esc_html_e( 'How often the plugin should check for new videos in the playlist.', 'blt-tube' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr id="bltt-sync-time-row">
+                            <th><label><?php esc_html_e( 'Sync Time', 'blt-tube' ); ?></label></th>
+                            <td>
+                                <div class="bltt-sync-time-inner">
+                                    <span id="bltt-sync-on-prefix"><?php esc_html_e( 'On', 'blt-tube' ); ?> </span>
+                                    <select id="bltt_sync_weekday" name="sync_weekday">
+                                        <?php
+                                        $weekday_labels = array(
+                                            0 => __( 'Sunday', 'blt-tube' ),
+                                            1 => __( 'Monday', 'blt-tube' ),
+                                            2 => __( 'Tuesday', 'blt-tube' ),
+                                            3 => __( 'Wednesday', 'blt-tube' ),
+                                            4 => __( 'Thursday', 'blt-tube' ),
+                                            5 => __( 'Friday', 'blt-tube' ),
+                                            6 => __( 'Saturday', 'blt-tube' ),
+                                        );
+                                        foreach ( $weekday_labels as $wday_num => $wday_name ) : ?>
+                                            <option value="<?php echo esc_attr( $wday_num ); ?>"
+                                                <?php selected( $sync_weekday, $wday_num ); ?>>
+                                                <?php echo esc_html( $wday_name ); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <span id="bltt-sync-at-word"></span>
+                                    <select id="bltt_sync_hour" name="sync_hour">
+                                        <?php for ( $h = 0; $h < 24; $h++ ) :
+                                            $period       = $h < 12 ? 'AM' : 'PM';
+                                            $display_hour = $h % 12 === 0 ? 12 : $h % 12;
+                                            $hour_label   = sprintf( '%d:00 %s', $display_hour, $period );
+                                        ?>
+                                            <option value="<?php echo esc_attr( $h ); ?>"
+                                                <?php selected( $sync_hour, $h ); ?>>
+                                                <?php echo esc_html( $hour_label ); ?>
+                                            </option>
+                                        <?php endfor; ?>
+                                    </select>
+                                    <span id="bltt-sync-colon">:</span>
+                                    <select id="bltt_sync_minute" name="sync_minute">
+                                        <?php foreach ( array( 0, 15, 30, 45 ) as $m ) : ?>
+                                            <option value="<?php echo esc_attr( $m ); ?>"
+                                                <?php selected( $sync_minute, $m ); ?>>
+                                                <?php echo esc_html( sprintf( '%02d', $m ) ); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <p class="description" id="bltt-sync-time-desc"></p>
+                                <p class="description">
+                                    <?php
+                                    printf(
+                                        /* translators: %s: WordPress timezone string */
+                                        esc_html__( 'Times use the site timezone: %s', 'blt-tube' ),
+                                        '<strong>' . esc_html( wp_timezone_string() ) . '</strong>'
+                                    );
+                                    ?>
+                                </p>
                             </td>
                         </tr>
                     </table>
@@ -630,6 +692,11 @@ class BLTT_Admin {
             'post_type'          => sanitize_key( wp_unslash( $_POST['post_type'] ?? 'post' ) ),
             'field_mapping'      => $field_mapping,
             'sync_cadence'       => sanitize_key( wp_unslash( $_POST['sync_cadence'] ?? 'daily' ) ),
+            'sync_hour'          => min( 23, absint( wp_unslash( $_POST['sync_hour'] ?? 3 ) ) ),
+            'sync_minute'        => in_array( absint( wp_unslash( $_POST['sync_minute'] ?? 0 ) ), array( 0, 15, 30, 45 ), true )
+                                        ? absint( wp_unslash( $_POST['sync_minute'] ) )
+                                        : 0,
+            'sync_weekday'       => min( 6, absint( wp_unslash( $_POST['sync_weekday'] ?? 1 ) ) ),
             'description_target' => sanitize_key( wp_unslash( $_POST['description_target'] ?? 'post_content' ) ),
             'transcript_target'  => sanitize_key( wp_unslash( $_POST['transcript_target'] ?? '' ) ),
             'set_thumbnail'      => ! empty( $_POST['set_thumbnail'] ),
@@ -638,8 +705,12 @@ class BLTT_Admin {
 
         update_option( 'bltt_settings', $settings );
 
-        $old_cadence = isset( $old_settings['sync_cadence'] ) ? $old_settings['sync_cadence'] : '';
-        if ( $settings['sync_cadence'] !== $old_cadence ) {
+        $schedule_changed = $settings['sync_cadence'] !== ( $old_settings['sync_cadence'] ?? '' )
+            || $settings['sync_hour']    !== ( $old_settings['sync_hour']    ?? '' )
+            || $settings['sync_minute']  !== ( $old_settings['sync_minute']  ?? '' )
+            || $settings['sync_weekday'] !== ( $old_settings['sync_weekday'] ?? '' );
+
+        if ( $schedule_changed ) {
             BLTT_Cron::unschedule_sync();
             if ( 'disabled' !== $settings['sync_cadence'] ) {
                 BLTT_Cron::schedule_sync();

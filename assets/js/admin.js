@@ -255,7 +255,47 @@
     });
 
     /* ---------------------------------------------------------------
-     * 5. Save Settings
+     * 5. Sync Time Visibility
+     * ------------------------------------------------------------- */
+
+    function updateSyncTimeVisibility() {
+        var cadence   = $('#bltt_sync_cadence').val();
+        var timeCads  = ['hourly', 'twicedaily', 'daily', 'weekly'];
+        var showRow   = timeCads.indexOf(cadence) >= 0;
+
+        $('#bltt-sync-time-row').toggle(showRow);
+        if (!showRow) return;
+
+        var isWeekly = (cadence === 'weekly');
+        var isHourly = (cadence === 'hourly');
+
+        $('#bltt-sync-on-prefix').toggle(isWeekly);
+        $('#bltt_sync_weekday').toggle(isWeekly);
+        $('#bltt_sync_hour').toggle(!isHourly);
+        $('#bltt-sync-colon').toggle(!isHourly);
+
+        if (isHourly) {
+            $('#bltt-sync-at-word').text('At minute :');
+        } else if (isWeekly) {
+            $('#bltt-sync-at-word').text(' at ');
+        } else {
+            $('#bltt-sync-at-word').text('At ');
+        }
+
+        var descs = {
+            hourly:    'The sync will run at this minute past every hour.',
+            twicedaily:'The sync will run at this time, then again 12 hours later.',
+            daily:     'The time of day the sync should run.',
+            weekly:    'The day and time the sync should run.'
+        };
+        $('#bltt-sync-time-desc').text(descs[cadence] || '');
+    }
+
+    $('#bltt_sync_cadence').on('change', updateSyncTimeVisibility);
+    updateSyncTimeVisibility();
+
+    /* ---------------------------------------------------------------
+     * 6. Save Settings
      * ------------------------------------------------------------- */
 
     $('#bltt-settings-form').on('submit', function (e) {
@@ -272,12 +312,15 @@
         });
 
         var data = {
-            action:             'bltt_save_settings',
-            nonce:              blttAdmin.nonce,
-            api_key:            $('#bltt_api_key').val(),
-            playlist_id:        $('#bltt_playlist_id').val(),
-            post_type:          $('#bltt_post_type').val(),
-            sync_cadence:       $('#bltt_sync_cadence').val(),
+            action: 'bltt_save_settings',
+            nonce: blttAdmin.nonce,
+            api_key: $('#bltt_api_key').val(),
+            playlist_id: $('#bltt_playlist_id').val(),
+            post_type: $('#bltt_post_type').val(),
+            sync_cadence: $('#bltt_sync_cadence').val(),
+            sync_hour: $('#bltt_sync_hour').val(),
+            sync_minute: $('#bltt_sync_minute').val(),
+            sync_weekday: $('#bltt_sync_weekday').val(),
             description_target: $('#bltt_description_target').val(),
             transcript_target:  $('#bltt_transcript_target').val(),
             set_thumbnail:      $('#bltt_set_thumbnail').is(':checked') ? 1 : 0,
@@ -300,7 +343,7 @@
     });
 
     /* ---------------------------------------------------------------
-     * 6. Load Playlist Preview
+     * 7. Manual Sync
      * ------------------------------------------------------------- */
 
     function renderPreviewTable(data) {
