@@ -19,6 +19,23 @@ class BLTT_YouTube_API {
         } else {
             $this->api_key = $api_key;
         }
+
+        /*
+         * Shared-store fallback, consulted only after this plugin's own option
+         * has already come up empty.
+         *
+         * This is a SERVER-side YouTube Data API v3 key: every request below is
+         * made by the site's PHP process and carries no Referer header, so the
+         * key must be IP-restricted in the Google Cloud console, never
+         * referrer-restricted. It must also never resolve from
+         * google.maps_api_key — that field holds a referrer-restricted browser
+         * key for the Maps JS API, which cannot authorize this API (and this
+         * key cannot authorize that one). The shared group therefore keeps one
+         * field per API and nothing cross-feeds between them.
+         */
+        if ( '' === $this->api_key && class_exists( 'BLT_Family' ) ) {
+            $this->api_key = BLT_Family::get( 'blt-tube', 'google', 'youtube_api_key' );
+        }
     }
 
     /**

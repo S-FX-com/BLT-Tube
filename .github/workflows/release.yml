@@ -63,6 +63,8 @@ jobs:
             --exclude='.gitignore' \
             --exclude='composer.json' \
             --exclude='composer.lock' \
+            --exclude='/DESIGN.md' \
+            --exclude='/blt-family-smoke.php' \
             ./ "$STAGING/$PLUGIN_SLUG/"
 
           (cd "$STAGING" && zip -r "$ZIP_NAME" "$PLUGIN_SLUG/")

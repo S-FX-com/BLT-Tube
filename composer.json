@@ -10,5 +10,11 @@
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true
-    }
+    },
+    "authors": [
+        {
+            "name": "S-FX.com",
+            "homepage": "https://www.s-fx.com"
+        }
+    ]
 }
