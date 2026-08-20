@@ -1,37 +1,10 @@
-/* BLT Tube — Admin Styles */
-
-.bltt-wrap {
-    max-width: 900px;
-}
-
-.bltt-card {
-    background: #fff;
-    border: 1px solid #c3c4c7;
-    border-radius: 4px;
-    padding: 20px 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
-}
-
-.bltt-card h2 {
-    margin-top: 0;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #eee;
-    font-size: 1.2em;
-}
-
-.bltt-card h3 {
-    margin-top: 20px;
-    margin-bottom: 5px;
-}
-
-.bltt-card pre {
-    background: #f6f7f7;
-    border: 1px solid #dcdcde;
-    padding: 8px 12px;
-    border-radius: 3px;
-    overflow-x: auto;
-}
+/* BLT Tube — Admin Styles
+ *
+ * The page shell (.blt-ui), cards, field rows, toggles, the save bar, the
+ * progress bar and the code blocks all come from the shared design system
+ * (assets/css/blt-design-system.css) — only what is specific to these screens
+ * lives here, and colours reference the design-system tokens.
+ */
 
 /* API key status indicator */
 #bltt-key-status {
@@ -39,10 +12,10 @@
     font-weight: 600;
 }
 #bltt-key-status.valid {
-    color: #00a32a;
+    color: var(--blt-success-fg, #00a32a);
 }
 #bltt-key-status.invalid {
-    color: #d63638;
+    color: var(--blt-danger-fg, #d63638);
 }
 
 /* Sync time picker */
@@ -58,11 +31,11 @@
 }
 
 #bltt-sync-at-word {
-    color: #50575e;
+    color: var(--blt-muted-fg, #50575e);
 }
 
 #bltt-sync-colon {
-    color: #50575e;
+    color: var(--blt-muted-fg, #50575e);
     font-weight: 600;
 }
 
@@ -77,15 +50,15 @@
     gap: 10px;
     padding: 8px 12px;
     margin-bottom: 4px;
-    border: 1px solid #ddd;
-    border-radius: 3px;
+    border: 1px solid var(--blt-border, #ddd);
+    border-radius: var(--blt-radius-sm, 3px);
     cursor: pointer;
     transition: background 0.15s;
 }
 
 .bltt-channel-item:hover {
-    background: #f0f6fc;
-    border-color: #2271b1;
+    background: var(--blt-primary-tint, #f0f6fc);
+    border-color: var(--blt-primary, #2271b1);
 }
 
 .bltt-channel-item img {
@@ -120,46 +93,17 @@
 }
 
 .bltt-remove-row {
-    color: #d63638 !important;
-    border-color: #d63638 !important;
+    color: var(--blt-danger-fg, #d63638) !important;
+    border-color: var(--blt-danger-fg, #d63638) !important;
     font-weight: bold;
     min-width: 32px;
 }
 
-/* Actions card */
-.bltt-actions-card {
-    text-align: center;
-}
-
-.bltt-actions-card .submit {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-/* Progress bar */
-.bltt-progress-bar {
-    width: 100%;
-    height: 24px;
-    background: #e0e0e0;
-    border-radius: 12px;
-    overflow: hidden;
-    margin: 16px 0 8px;
-}
-
-.bltt-progress-bar-inner {
-    height: 100%;
-    background: linear-gradient(90deg, #2271b1, #135e96);
-    border-radius: 12px;
-    transition: width 0.4s ease;
-    min-width: 0;
-}
-
 #bltt-sync-status-text {
+    margin-top: 8px;
     text-align: center;
     font-style: italic;
-    color: #555;
+    color: var(--blt-muted-fg, #555);
 }
 
 /* Notices */
@@ -172,8 +116,8 @@
     display: inline-block;
     width: 16px;
     height: 16px;
-    border: 2px solid #ccc;
-    border-top-color: #2271b1;
+    border: 2px solid var(--blt-border, #ccc);
+    border-top-color: var(--blt-primary, #2271b1);
     border-radius: 50%;
     animation: bltt-spin 0.6s linear infinite;
     vertical-align: middle;
@@ -184,18 +128,16 @@
     to { transform: rotate(360deg); }
 }
 
-/* Sync log table */
-.bltt-wrap .widefat {
-    margin-top: 12px;
+/* Playlist preview controls (select-all + import, above the preview table) */
+.bltt-preview-controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
 }
 
 /* Responsive */
 @media screen and (max-width: 782px) {
-    .bltt-actions-card .submit {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
     .bltt-mapping-row select,
     .bltt-mapping-row input[type="text"] {
         max-width: 100%;
