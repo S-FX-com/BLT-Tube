@@ -39,6 +39,15 @@ class BLTT_YouTube_API {
     }
 
     /**
+     * Whether a key resolved from any source (argument, this plugin's own
+     * option, or the shared BLT store). Lets callers pick a keyless fallback
+     * without making a request that is certain to fail.
+     */
+    public function has_key() {
+        return '' !== trim( (string) $this->api_key );
+    }
+
+    /**
      * Validate that the API key works.
      *
      * Returns true on success or a WP_Error with the API's own message on failure,
@@ -128,11 +137,20 @@ class BLTT_YouTube_API {
     }
 
     /**
-     * Get all video IDs from a playlist.
+     * Get video IDs from a playlist, in playlist order.
+     *
+     * @param string $playlist_id Playlist ID.
+     * @param int    $limit       Stop once this many IDs are collected. 0 (the
+     *                            default) walks the whole playlist, which is
+     *                            what the import/sync engine needs; the gallery
+     *                            passes a limit so a channel's uploads playlist
+     *                            with thousands of videos costs one or two
+     *                            requests instead of dozens.
      */
-    public function get_playlist_video_ids( $playlist_id ) {
+    public function get_playlist_video_ids( $playlist_id, $limit = 0 ) {
         $video_ids  = array();
         $page_token = '';
+        $limit      = max( 0, (int) $limit );
 
         do {
             $params = array(
@@ -156,10 +174,74 @@ class BLTT_YouTube_API {
                 }
             }
 
+            if ( $limit && count( $video_ids ) >= $limit ) {
+                return array_slice( $video_ids, 0, $limit );
+            }
+
             $page_token = isset( $response['nextPageToken'] ) ? $response['nextPageToken'] : '';
         } while ( $page_token );
 
         return $video_ids;
+    }
+
+    /**
+     * Get the ID of the channel that owns a playlist.
+     *
+     * @return string|WP_Error Channel ID (UC...).
+     */
+    public function get_playlist_channel_id( $playlist_id ) {
+        $response = $this->request( '/playlists', array(
+            'part'       => 'snippet',
+            'id'         => $playlist_id,
+            'maxResults' => 1,
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        if ( empty( $response['items'][0]['snippet']['channelId'] ) ) {
+            return new WP_Error( 'not_found', 'Playlist not found.' );
+        }
+
+        return $response['items'][0]['snippet']['channelId'];
+    }
+
+    /**
+     * Get a channel's public name, link and avatar.
+     *
+     * @return array|WP_Error { id, title, url, thumb }
+     */
+    public function get_channel( $channel_id ) {
+        $response = $this->request( '/channels', array(
+            'part'       => 'snippet',
+            'id'         => $channel_id,
+            'maxResults' => 1,
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        if ( empty( $response['items'][0]['snippet'] ) ) {
+            return new WP_Error( 'not_found', 'Channel not found.' );
+        }
+
+        $snippet = $response['items'][0]['snippet'];
+        $thumb   = '';
+        foreach ( array( 'medium', 'default', 'high' ) as $size ) {
+            if ( ! empty( $snippet['thumbnails'][ $size ]['url'] ) ) {
+                $thumb = $snippet['thumbnails'][ $size ]['url'];
+                break;
+            }
+        }
+
+        return array(
+            'id'    => $channel_id,
+            'title' => isset( $snippet['title'] ) ? $snippet['title'] : '',
+            'url'   => 'https://www.youtube.com/channel/' . rawurlencode( $channel_id ),
+            'thumb' => $thumb,
+        );
     }
 
     /**
