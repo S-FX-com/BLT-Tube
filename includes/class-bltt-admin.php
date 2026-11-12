@@ -32,6 +32,7 @@ class BLTT_Admin {
         add_action( 'wp_ajax_bltt_import_selected', array( $this, 'ajax_import_selected' ) );
         add_action( 'wp_ajax_bltt_sync_updates', array( $this, 'ajax_sync_updates' ) );
         add_action( 'wp_ajax_bltt_sync_status', array( $this, 'ajax_sync_status' ) );
+        add_action( 'wp_ajax_bltt_clear_gallery_cache', array( $this, 'ajax_clear_gallery_cache' ) );
     }
 
     public function add_menu_pages() {
@@ -105,6 +106,9 @@ class BLTT_Admin {
         wp_localize_script( 'bltt-admin', 'blttAdmin', array(
             'ajax_url' => admin_url( 'admin-ajax.php' ),
             'nonce'    => wp_create_nonce( 'bltt_nonce' ),
+            'i18n'     => array(
+                'clear_failed' => __( 'The gallery cache could not be cleared. Reload the page and try again.', 'blt-tube' ),
+            ),
         ) );
     }
 
@@ -200,7 +204,7 @@ class BLTT_Admin {
                     <div class="blt-card-header">
                         <h2><?php esc_html_e( '1. YouTube API Key', 'blt-tube' ); ?></h2>
                         <p>
-                            <?php esc_html_e( 'A YouTube Data API v3 key is required only to IMPORT video metadata (titles, descriptions, tags, durations, etc.). It is NOT needed for the [blt_tube_playlist] shortcode, which uses YouTube\'s public iframe embed.', 'blt-tube' ); ?>
+                            <?php esc_html_e( 'A YouTube Data API v3 key is required to IMPORT video metadata (titles, descriptions, tags, durations, etc.). It is NOT needed for the [blt_tube_playlist] shortcode, which uses YouTube\'s public iframe embed. The [blt_tube_gallery] shortcode uses the key when there is one and otherwise falls back to the playlist\'s public feed, which only lists the latest 15 videos.', 'blt-tube' ); ?>
                         </p>
                     </div>
                     <div class="blt-card-body">
@@ -572,6 +576,27 @@ class BLTT_Admin {
                 </div>
             </div>
 
+            <!-- Video gallery cache — its own action, so outside the settings form -->
+            <div class="blt-card" id="bltt-gallery-cache-card">
+                <div class="blt-card-header">
+                    <h2><?php esc_html_e( 'Video Gallery Cache', 'blt-tube' ); ?></h2>
+                    <p>
+                        <?php esc_html_e( 'The [blt_tube_gallery] shortcode keeps each playlist\'s videos for an hour instead of asking YouTube on every page view. Clear the cache to show newly published videos right away.', 'blt-tube' ); ?>
+                    </p>
+                </div>
+                <div class="blt-card-body">
+                    <div class="blt-field">
+                        <div class="blt-field-label"><?php esc_html_e( 'Cached galleries', 'blt-tube' ); ?></div>
+                        <div>
+                            <button type="button" id="bltt-clear-gallery-cache" class="button button-secondary">
+                                <?php esc_html_e( 'Clear gallery cache', 'blt-tube' ); ?>
+                            </button>
+                            <p class="blt-field-desc"><?php esc_html_e( 'Each gallery reloads from YouTube the next time its page is viewed.', 'blt-tube' ); ?></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
         <?php
     }
@@ -632,12 +657,12 @@ class BLTT_Admin {
         $playlist_id = isset( $settings['playlist_id'] ) ? $settings['playlist_id'] : '';
         ?>
         <div class="wrap blt-ui bltt-wrap">
-            <?php $this->render_page_header( __( 'BLT Tube Shortcode', 'blt-tube' ) ); ?>
+            <?php $this->render_page_header( __( 'BLT Tube Shortcodes', 'blt-tube' ) ); ?>
 
             <div class="blt-card">
                 <div class="blt-card-header">
                     <h2><?php esc_html_e( 'Embed a YouTube Playlist', 'blt-tube' ); ?></h2>
-                    <p><?php esc_html_e( 'Drop this shortcode into any post, page, widget, or block to embed a YouTube playlist player. No API key is required for embedding.', 'blt-tube' ); ?></p>
+                    <p><?php esc_html_e( 'Drop this shortcode into any post, page, widget, or block to embed a single YouTube playlist player. No API key is required for embedding.', 'blt-tube' ); ?></p>
                 </div>
                 <div class="blt-card-body">
                     <h3><?php esc_html_e( 'Basic usage (uses the playlist configured in settings)', 'blt-tube' ); ?></h3>
@@ -681,6 +706,71 @@ class BLTT_Admin {
                 <div class="blt-card-body">
                     <h3><?php esc_html_e( 'Full example', 'blt-tube' ); ?></h3>
                     <code class="blt-code">[blt_tube_playlist id="PLxxxx" responsive="yes" autoplay="no" privacy="yes"]</code>
+                </div>
+            </div>
+
+            <div class="blt-card">
+                <div class="blt-card-header">
+                    <h2><?php esc_html_e( 'Show a Playlist as a Video Gallery', 'blt-tube' ); ?></h2>
+                    <p><?php esc_html_e( 'Shows the videos of a playlist as thumbnails with titles, in a choice of layouts. Nothing from YouTube loads until a visitor clicks a video. With an API key the gallery can show up to 50 videos; without one it reads the playlist\'s public feed, which only lists the latest 15.', 'blt-tube' ); ?></p>
+                </div>
+                <div class="blt-card-body">
+                    <h3><?php esc_html_e( 'Grid (default)', 'blt-tube' ); ?></h3>
+                    <code class="blt-code">[blt_tube_gallery id="PLxxxxxxxxxxxxxxxx" columns="3" max="12"]</code>
+
+                    <h3><?php esc_html_e( 'Featured — a large player with thumbnails underneath', 'blt-tube' ); ?></h3>
+                    <code class="blt-code">[blt_tube_gallery layout="featured" thumbs="strip" show_description="yes"]</code>
+
+                    <h3><?php esc_html_e( 'Carousel — a horizontal, swipeable row', 'blt-tube' ); ?></h3>
+                    <code class="blt-code">[blt_tube_gallery layout="carousel" columns="4" play="lightbox"]</code>
+
+                    <h3><?php esc_html_e( 'List — thumbnail on the left, details on the right', 'blt-tube' ); ?></h3>
+                    <code class="blt-code">[blt_tube_gallery layout="list" show_description="yes" load_more="yes" per_page="5"]</code>
+
+                    <h3><?php esc_html_e( 'A whole channel, newest first', 'blt-tube' ); ?></h3>
+                    <code class="blt-code">[blt_tube_gallery id="UUxxxxxxxxxxxxxxxxxxxxxx" show_header="yes" max="24" load_more="yes"]</code>
+                    <p class="blt-field-desc"><?php esc_html_e( 'A channel\'s uploads playlist ID is its channel ID with the leading UC replaced by UU.', 'blt-tube' ); ?></p>
+
+                    <h3><?php esc_html_e( 'All supported attributes', 'blt-tube' ); ?></h3>
+                </div>
+
+                <table class="widefat striped">
+                    <thead>
+                        <tr>
+                            <th><?php esc_html_e( 'Attribute', 'blt-tube' ); ?></th>
+                            <th><?php esc_html_e( 'Default', 'blt-tube' ); ?></th>
+                            <th><?php esc_html_e( 'Description', 'blt-tube' ); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>id</code></td><td><em><?php esc_html_e( 'saved playlist', 'blt-tube' ); ?></em></td><td><?php esc_html_e( 'YouTube playlist ID. Use a channel\'s uploads playlist (UU…) to show a whole channel.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>layout</code></td><td><code>grid</code></td><td><?php esc_html_e( 'grid, featured, carousel or list.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>play</code></td><td><code>inline</code></td><td><?php esc_html_e( 'inline (plays in place), lightbox (opens in a modal) or youtube (opens YouTube in a new tab). The featured layout always plays in its main player.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>columns</code></td><td><code>3</code></td><td><?php esc_html_e( 'Videos per row (1–6) when the gallery is wider than 840px. Featured layout default: 4.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>columns_tablet</code></td><td><code>2</code></td><td><?php esc_html_e( 'Videos per row when the gallery is 481–840px wide. Featured layout default: 3.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>columns_mobile</code></td><td><code>1</code></td><td><?php esc_html_e( 'Videos per row when the gallery is 480px wide or less. Featured layout default: 2.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>max</code></td><td><code>12</code></td><td><?php esc_html_e( 'How many videos to show (up to 50; up to 15 without an API key).', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>order</code></td><td><code>playlist</code></td><td><?php esc_html_e( 'playlist (the playlist\'s own order) or newest (most recently published first).', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>show_header</code></td><td><code>no</code></td><td><?php esc_html_e( 'Show the channel avatar and name, linked to the channel.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>show_title</code></td><td><code>yes</code></td><td><?php esc_html_e( 'Show each video\'s title.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>show_date</code></td><td><code>yes</code></td><td><?php esc_html_e( 'Show each video\'s publish date.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>show_description</code></td><td><code>no</code></td><td><?php esc_html_e( 'Show a short description excerpt (list layout and the featured player).', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>load_more</code></td><td><code>no</code></td><td><?php esc_html_e( 'Show per_page videos first and reveal the rest with a "Load more" button (grid, list and featured grid).', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>per_page</code></td><td><code>6</code></td><td><?php esc_html_e( 'Videos shown per batch when load_more is on.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>thumbs</code></td><td><code>grid</code></td><td><?php esc_html_e( 'Featured layout only: show the thumbnails under the player as a grid or a horizontal strip.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>privacy</code></td><td><code>yes</code></td><td><?php esc_html_e( 'Play videos from youtube-nocookie.com (privacy-enhanced mode).', 'blt-tube' ); ?></td></tr>
+                    </tbody>
+                </table>
+
+                <div class="blt-card-body">
+                    <p class="blt-field-desc"><?php esc_html_e( 'Videos are cached for an hour, so a new upload can take that long to appear. To refresh sooner, use "Clear gallery cache" on the BLT Tube settings screen.', 'blt-tube' ); ?></p>
+                    <p class="blt-field-desc"><?php esc_html_e( 'To match your site, set these CSS custom properties on .bltt-gallery or any wrapper:', 'blt-tube' ); ?></p>
+                    <span class="blt-chips">
+                        <code class="blt-chip">--bltt-gallery-gap</code>
+                        <code class="blt-chip">--bltt-gallery-radius</code>
+                        <code class="blt-chip">--bltt-gallery-accent</code>
+                        <code class="blt-chip">--bltt-gallery-accent-contrast</code>
+                    </span>
                 </div>
             </div>
         </div>
@@ -812,6 +902,12 @@ class BLTT_Admin {
 
         update_option( 'bltt_settings', $settings );
 
+        // A gallery cached from the keyless RSS fallback (or with the old key's
+        // error) should not outlive the key change that fixes it.
+        if ( $settings['api_key'] !== ( $old_settings['api_key'] ?? '' ) ) {
+            BLTT_Gallery::flush_cache();
+        }
+
         $schedule_changed = $settings['sync_cadence'] !== ( $old_settings['sync_cadence'] ?? '' )
             || $settings['sync_hour']    !== ( $old_settings['sync_hour']    ?? '' )
             || $settings['sync_minute']  !== ( $old_settings['sync_minute']  ?? '' )
@@ -891,6 +987,18 @@ class BLTT_Admin {
 
         $status = get_transient( 'bltt_sync_progress' );
         wp_send_json_success( $status ? $status : array( 'status' => 'idle' ) );
+    }
+
+    public function ajax_clear_gallery_cache() {
+        check_ajax_referer( 'bltt_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( __( 'You are not allowed to do that.', 'blt-tube' ) );
+        }
+
+        BLTT_Gallery::flush_cache();
+
+        wp_send_json_success( __( 'Gallery cache cleared. Each gallery reloads from YouTube on its next view.', 'blt-tube' ) );
     }
 
     /* ---------------------------------------------------------------

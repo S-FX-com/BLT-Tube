@@ -551,4 +551,27 @@
         });
     });
 
+    /* ---------------------------------------------------------------
+     * 9. Clear the [blt_tube_gallery] cache
+     * ------------------------------------------------------------- */
+
+    $('#bltt-clear-gallery-cache').on('click', function () {
+        var $btn   = $(this);
+        var failed = (blttAdmin.i18n && blttAdmin.i18n.clear_failed) || 'Request failed.';
+
+        setLoading($btn, true);
+
+        $.post(blttAdmin.ajax_url, {
+            action: 'bltt_clear_gallery_cache',
+            nonce:  blttAdmin.nonce
+        }, function (res) {
+            setLoading($btn, false);
+            // Escaped: showNotice() inserts its message as HTML.
+            showNotice($('<span>').text(res.data || failed).html(), res.success ? 'success' : 'error');
+        }).fail(function () {
+            setLoading($btn, false);
+            showNotice($('<span>').text(failed).html(), 'error');
+        });
+    });
+
 })(jQuery);

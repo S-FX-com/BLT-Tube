@@ -2,8 +2,8 @@
 /**
  * Plugin Name: BLT Tube
  * Plugin URI:  https://github.com/s-fx-com/blt-tube
- * Description: Import YouTube playlist videos into any WordPress Custom Post Type with full field mapping, thumbnails, transcripts, and scheduled sync. Includes a shortcode for embedding playlists.
- * Version:     1.4.0
+ * Description: Import YouTube playlist videos into any WordPress Custom Post Type with full field mapping, thumbnails, transcripts, and scheduled sync. Includes shortcodes for embedding a playlist player or a video gallery.
+ * Version:     1.5.0
  * Author:      S-FX.com
  * Author URI:  https://www.s-fx.com
  * License:     GPL-2.0-or-later
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'BLTT_VERSION', '1.4.0' );
+define( 'BLTT_VERSION', '1.5.0' );
 define( 'BLTT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BLTT_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'BLTT_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -114,6 +114,7 @@ require_once BLTT_PLUGIN_DIR . 'includes/class-bltt-admin.php';
 require_once BLTT_PLUGIN_DIR . 'includes/class-bltt-sync-engine.php';
 require_once BLTT_PLUGIN_DIR . 'includes/class-bltt-cron.php';
 require_once BLTT_PLUGIN_DIR . 'includes/class-bltt-shortcode.php';
+require_once BLTT_PLUGIN_DIR . 'includes/class-bltt-gallery.php';
 
 /**
  * Main plugin class.
@@ -140,6 +141,7 @@ final class BLT_Tube {
         BLTT_Admin::get_instance();
         BLTT_Cron::get_instance();
         BLTT_Shortcode::get_instance();
+        BLTT_Gallery::get_instance();
     }
 
     public function activate() {
