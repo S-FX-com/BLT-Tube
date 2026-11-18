@@ -51,7 +51,7 @@ class BLTT_Shortcode {
             $playlist_id = isset( $settings['playlist_id'] ) ? trim( $settings['playlist_id'] ) : '';
         }
 
-        if ( '' === $playlist_id || ! $this->is_valid_playlist_id( $playlist_id ) ) {
+        if ( '' === $playlist_id || ! self::is_valid_playlist_id( $playlist_id ) ) {
             if ( current_user_can( 'manage_options' ) ) {
                 return '<p><em>' . esc_html__( 'BLT Tube: no valid playlist ID provided. Set one in BLT Tube settings or pass id="PL..." to the shortcode.', 'blt-tube' ) . '</em></p>';
             }
@@ -113,9 +113,10 @@ class BLTT_Shortcode {
 
     /**
      * YouTube playlist IDs always start with one of these prefixes and contain
-     * only URL-safe characters.
+     * only URL-safe characters. Public and static so [blt_tube_gallery] validates
+     * against the same rule instead of keeping a second copy of the pattern.
      */
-    private function is_valid_playlist_id( $id ) {
+    public static function is_valid_playlist_id( $id ) {
         return (bool) preg_match( '/^(PL|UU|LL|FL|RD|OL)[A-Za-z0-9_-]{10,}$/', $id );
     }
 
