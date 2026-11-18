@@ -155,9 +155,13 @@ class BLTT_Gallery {
         $playlist_id = '';
         $video_ids   = array();
 
+        $rejected = array();
+
         if ( '' !== trim( (string) $atts['videos'] ) ) {
             // A hand-picked list: `id` is ignored and no playlist is read.
-            $video_ids = array_slice( self::parse_video_ids( $atts['videos'] ), 0, $max_limit );
+            $parsed    = self::parse_video_list( $atts['videos'] );
+            $video_ids = array_slice( $parsed['ids'], 0, $max_limit );
+            $rejected  = $parsed['rejected'];
 
             if ( ! $video_ids ) {
                 return $this->render_admin_only(
@@ -285,7 +289,14 @@ class BLTT_Gallery {
         );
 
         if ( $is_admin ) {
-            $html .= $this->render_admin_notices( $data, $max, $ctx['show_date'] || $ctx['show_desc'] );
+            $html .= $this->render_admin_notices( $data, array(
+                'is_list'     => (bool) $video_ids,
+                'max'         => $max,
+                'order'       => $order,
+                'wants_meta'  => $ctx['show_date'] || $ctx['show_desc'],
+                'show_header' => self::is_truthy( $atts['show_header'] ),
+                'rejected'    => $rejected,
+            ) );
         }
 
         if ( self::is_truthy( $atts['show_header'] ) ) {
@@ -340,21 +351,59 @@ class BLTT_Gallery {
 
         $this->enqueue_assets();
 
-        return '<div class="bltt-gallery bltt-gallery--empty"><p class="bltt-gallery__notice">' . $message . '</p></div>';
+        return '<div class="bltt-gallery bltt-gallery--empty">' . $this->notice_box( array( $message ) ) . '</div>';
     }
 
     /**
-     * @param array $data       Gallery payload.
-     * @param int   $max        The `max` in effect.
-     * @param bool  $wants_meta Whether dates or descriptions were asked for.
+     * One admin-only box for any number of already-escaped notices.
      */
-    private function render_admin_notices( $data, $max, $wants_meta ) {
-        $notices = array();
-        $source  = isset( $data['source'] ) ? $data['source'] : '';
+    private function notice_box( $notices ) {
+        if ( count( $notices ) > 1 ) {
+            $body = '<ul><li>' . implode( '</li><li>', $notices ) . '</li></ul>';
+        } else {
+            $body = '<p>' . reset( $notices ) . '</p>';
+        }
 
-        if ( 'oembed' === $source && $wants_meta ) {
-            $notices[] = esc_html__( 'BLT Tube: no YouTube API key is set, so this gallery reads each video\'s title from YouTube\'s public oEmbed service, which carries no publish dates or descriptions.', 'blt-tube' )
-                . ' <a href="' . esc_url( admin_url( 'admin.php?page=bltt-settings' ) ) . '">' . esc_html__( 'Add an API key', 'blt-tube' ) . '</a>';
+        return '<div class="bltt-gallery__notice" role="note">' . $body
+            . '<p><em>' . esc_html__( '(Only administrators see this message.)', 'blt-tube' ) . '</em></p></div>';
+    }
+
+    /**
+     * Everything an administrator should know about this gallery, in one box.
+     *
+     * @param array $data Gallery payload.
+     * @param array $ctx  { is_list, max, order, wants_meta, show_header, rejected }
+     */
+    private function render_admin_notices( $data, $ctx ) {
+        $notices  = array();
+        $source   = isset( $data['source'] ) ? $data['source'] : '';
+        $max      = (int) $ctx['max'];
+        $key_link = ' <a href="' . esc_url( admin_url( 'admin.php?page=bltt-settings' ) ) . '">' . esc_html__( 'Add an API key', 'blt-tube' ) . '</a>';
+
+        if ( $ctx['rejected'] ) {
+            $shown = array();
+
+            foreach ( $ctx['rejected'] as $token ) {
+                $shown[] = self::clean_text( $token, 60 ) . ( self::text_length( $token ) > 60 ? '…' : '' );
+            }
+
+            $notices[] = sprintf(
+                /* translators: %s: comma-separated list of the rejected entries */
+                esc_html__( 'BLT Tube: these entries in videos="…" are not YouTube video IDs or URLs and were ignored: %s', 'blt-tube' ),
+                '<code>' . implode( '</code>, <code>', array_map( 'esc_html', $shown ) ) . '</code>'
+            );
+        }
+
+        if ( 'oembed' === $source && $ctx['wants_meta'] ) {
+            $notices[] = esc_html__( 'BLT Tube: no YouTube API key is set, so this gallery reads each video\'s title from YouTube\'s public oEmbed service, which carries no publish dates or descriptions.', 'blt-tube' ) . $key_link;
+        }
+
+        if ( 'oembed' === $source && 'newest' === $ctx['order'] ) {
+            $notices[] = esc_html__( 'BLT Tube: order="newest" was not applied. Without an API key there are no publish dates to sort by, so the videos are in the order listed.', 'blt-tube' ) . $key_link;
+        }
+
+        if ( $ctx['show_header'] && ! empty( $data['channel_mixed'] ) ) {
+            $notices[] = esc_html__( 'BLT Tube: show_header="yes" was ignored because the listed videos belong to different channels, so there is no single channel to show.', 'blt-tube' );
         }
 
         if ( ! empty( $data['skipped'] ) ) {
@@ -376,9 +425,7 @@ class BLTT_Gallery {
                 );
             }
 
-            $notice .= ' <a href="' . esc_url( admin_url( 'admin.php?page=bltt-settings' ) ) . '">' . esc_html__( 'Add an API key', 'blt-tube' ) . '</a>';
-
-            $notices[] = $notice;
+            $notices[] = $notice . $key_link;
         }
 
         if ( ! empty( $data['error'] ) ) {
@@ -389,17 +436,7 @@ class BLTT_Gallery {
             );
         }
 
-        if ( ! $notices ) {
-            return '';
-        }
-
-        $html = '';
-
-        foreach ( $notices as $notice ) {
-            $html .= '<p class="bltt-gallery__notice">' . $notice . ' <em>' . esc_html__( '(Only administrators see this message.)', 'blt-tube' ) . '</em></p>';
-        }
-
-        return $html;
+        return $notices ? $this->notice_box( $notices ) : '';
     }
 
     private function render_header( $channel ) {
@@ -876,9 +913,9 @@ class BLTT_Gallery {
             $by_id[ $detail['video_id'] ] = $detail;
         }
 
-        $videos     = array();
-        $skipped    = array();
-        $channel_id = '';
+        $videos   = array();
+        $skipped  = array();
+        $channels = array();
 
         foreach ( $ids as $id ) {
             if ( ! isset( $by_id[ $id ] ) ) {
@@ -888,18 +925,19 @@ class BLTT_Gallery {
 
             $videos[] = self::video_from_api( $id, $by_id[ $id ] );
 
-            // The optional header shows the first video's channel.
-            if ( '' === $channel_id && ! empty( $by_id[ $id ]['channel_id'] ) ) {
-                $channel_id = (string) $by_id[ $id ]['channel_id'];
-            }
+            $channels[ isset( $by_id[ $id ]['channel_id'] ) ? (string) $by_id[ $id ]['channel_id'] : '' ] = true;
         }
 
+        // The optional header is only honest when every video is from one channel.
+        $mixed = count( $channels ) > 1;
+
         return array(
-            'videos'     => self::order_and_limit( $videos, $order, $max ),
-            'source'     => 'api',
-            'channel'    => array(),
-            'channel_id' => $channel_id,
-            'skipped'    => $skipped,
+            'videos'        => self::order_and_limit( $videos, $order, $max ),
+            'source'        => 'api',
+            'channel'       => array(),
+            'channel_id'    => $mixed ? '' : (string) key( $channels ),
+            'channel_mixed' => $mixed,
+            'skipped'       => $skipped,
         );
     }
 
@@ -915,6 +953,7 @@ class BLTT_Gallery {
         $videos     = array();
         $skipped    = array();
         $channel    = array();
+        $channels   = array();
         $last_error = null;
 
         foreach ( $ids as $id ) {
@@ -955,15 +994,24 @@ class BLTT_Gallery {
                 'thumb'       => '',
             );
 
-            // The optional header shows the first video's channel.
+            $url = isset( $body['author_url'] ) ? (string) $body['author_url'] : '';
+
+            $channels[ '' !== $url ? $url : $author ] = true;
+
             if ( ! $channel && '' !== $author ) {
-                $url     = isset( $body['author_url'] ) ? (string) $body['author_url'] : '';
                 $channel = array(
                     'title' => $author,
                     'url'   => 0 === strpos( $url, 'https://www.youtube.com/' ) ? $url : '',
                     'thumb' => '',
                 );
             }
+        }
+
+        // The optional header is only honest when every video is from one channel.
+        $mixed = count( $channels ) > 1;
+
+        if ( $mixed ) {
+            $channel = array();
         }
 
         if ( ! $videos ) {
@@ -981,10 +1029,11 @@ class BLTT_Gallery {
         }
 
         return array(
-            'videos'  => $this->probe_thumbs( self::order_and_limit( $videos, $order, $max ) ),
-            'source'  => 'oembed',
-            'channel' => $channel,
-            'skipped' => $skipped,
+            'videos'        => $this->probe_thumbs( self::order_and_limit( $videos, $order, $max ) ),
+            'source'        => 'oembed',
+            'channel'       => $channel,
+            'channel_mixed' => $mixed,
+            'skipped'       => $skipped,
         );
     }
 
@@ -1345,9 +1394,21 @@ class BLTT_Gallery {
      * @return string[]
      */
     public static function parse_video_ids( $value ) {
+        $parsed = self::parse_video_list( $value );
+
+        return $parsed['ids'];
+    }
+
+    /**
+     * Like parse_video_ids(), but also returns the entries it could not read.
+     *
+     * @return array { ids: string[], rejected: string[] }
+     */
+    public static function parse_video_list( $value ) {
         // The editor may have stored "&" as "&#038;" or "&amp;".
-        $value = html_entity_decode( (string) $value, ENT_QUOTES, 'UTF-8' );
-        $ids   = array();
+        $value    = html_entity_decode( (string) $value, ENT_QUOTES, 'UTF-8' );
+        $ids      = array();
+        $rejected = array();
 
         foreach ( preg_split( '/[\s,;]+/', $value ) as $token ) {
             $token = trim( $token );
@@ -1363,10 +1424,20 @@ class BLTT_Gallery {
 
             if ( preg_match( '#(?:youtube(?:-nocookie)?\.com/(?:watch\?(?:[^\#]*&)?v=|(?:embed|v|shorts|live)/)|youtu\.be/)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])#i', $token, $m ) ) {
                 $ids[ $m[1] ] = true;
+                continue;
             }
+
+            $rejected[] = $token;
         }
 
-        return array_keys( $ids );
+        return array(
+            'ids'      => array_keys( $ids ),
+            'rejected' => $rejected,
+        );
+    }
+
+    private static function text_length( $text ) {
+        return function_exists( 'mb_strlen' ) ? mb_strlen( (string) $text ) : strlen( (string) $text );
     }
 
     /**

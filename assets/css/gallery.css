@@ -582,22 +582,72 @@
  * Admin-only notice
  * ------------------------------------------------------------- */
 
+/*
+ * The box is always light, so its text colours are pinned and marked
+ * !important: dark-mode themes commonly colour every `p`, `li` and `a` in
+ * the content area with more specific selectors, which left this text at
+ * ~1.2:1 against the box. #1d2327 and #135e96 are ≥ 6.5:1 on #fcf9e8.
+ */
+.bltt-gallery .bltt-gallery__notice,
+.bltt-gallery .bltt-gallery__notice p,
+.bltt-gallery .bltt-gallery__notice ul,
+.bltt-gallery .bltt-gallery__notice li,
+.bltt-gallery .bltt-gallery__notice em,
+.bltt-gallery .bltt-gallery__notice strong {
+    color: #1d2327 !important;
+    font-size: 14px;
+    font-style: normal;
+    line-height: 1.5;
+}
+
 .bltt-gallery .bltt-gallery__notice {
     margin: 0 0 12px;
     padding: 10px 14px;
     border: 0;
     border-left: 4px solid #dba617;
     border-radius: 4px;
-    background: #fcf9e8;
-    color: #1e1e1e;
-    font-size: 14px;
-    font-style: normal;
-    line-height: 1.5;
+    background: #fcf9e8 !important;
+    text-align: left;
 }
 
-.bltt-gallery .bltt-gallery__notice a {
-    color: inherit;
-    text-decoration: underline;
+.bltt-gallery .bltt-gallery__notice p,
+.bltt-gallery .bltt-gallery__notice ul {
+    margin: 0;
+    padding: 0;
+}
+
+.bltt-gallery .bltt-gallery__notice ul {
+    list-style: disc;
+    padding-left: 1.25em;
+}
+
+.bltt-gallery .bltt-gallery__notice li {
+    margin: 0 0 4px;
+}
+
+.bltt-gallery .bltt-gallery__notice li:last-child {
+    margin-bottom: 0;
+}
+
+.bltt-gallery .bltt-gallery__notice p + p,
+.bltt-gallery .bltt-gallery__notice ul + p {
+    margin-top: 6px;
+}
+
+.bltt-gallery .bltt-gallery__notice em {
+    font-style: italic;
+}
+
+.bltt-gallery .bltt-gallery__notice a,
+.bltt-gallery .bltt-gallery__notice a:visited {
+    color: #135e96 !important;
+    text-decoration: underline !important;
+    background: transparent !important;
+}
+
+.bltt-gallery .bltt-gallery__notice a:hover,
+.bltt-gallery .bltt-gallery__notice a:focus {
+    color: #0a4b78 !important;
 }
 
 /* ---------------------------------------------------------------

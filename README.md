@@ -150,7 +150,7 @@ With no `id`, it uses the playlist saved in BLT Tube settings.
 | Attribute          | Default            | Description |
 |--------------------|--------------------|-------------|
 | `id`               | *(saved playlist)* | YouTube playlist ID. `UU…` uploads playlists show a whole channel. Ignored when `videos` is set. |
-| `videos`           | *(none)*           | Specific videos instead of a playlist: IDs or URLs separated by commas, in the order to show them. Up to 50. All of them show unless `max` is set. |
+| `videos`           | *(none)*           | Specific videos instead of a playlist: IDs or URLs separated by commas, in the order to show them. Up to 50. All of them show unless `max` is set. Entries that are not a video ID or URL are ignored and listed in an admin-only note. |
 | `layout`           | `grid`             | `grid`, `featured`, `carousel`, or `list`. |
 | `play`             | `inline`           | `inline` replaces the thumbnail with the player; `lightbox` opens it in a modal; `youtube` opens YouTube in a new tab. The featured layout always plays in its main player. |
 | `columns`          | `3`                | Videos per row (1–6) when the gallery is wider than 840px. Featured layout default: `4`. |
@@ -158,7 +158,7 @@ With no `id`, it uses the playlist saved in BLT Tube settings.
 | `columns_mobile`   | `1`                | Videos per row when the gallery is 480px wide or less. Featured layout default: `2`. |
 | `max`              | `12`               | How many videos to show. Up to 50 (filter: `bltt_gallery_max_limit`); up to 15 for a playlist without an API key. With `videos`, defaults to all of them. |
 | `order`            | `playlist`         | `playlist` keeps the playlist's (or the `videos` list's) own order; `newest` sorts by publish date, newest first. Needs an API key with `videos`. |
-| `show_header`      | `no`               | Show the channel avatar and name, linked to the channel. With `videos`, the first video's channel. |
+| `show_header`      | `no`               | Show the channel avatar and name, linked to the channel. With `videos`, only when every listed video belongs to the same channel; otherwise the header is hidden and administrators see a note. |
 | `show_title`       | `yes`              | Show each video's title. |
 | `show_date`        | `yes`              | Show each video's publish date. |
 | `show_description` | `no`               | Show a short description excerpt (list layout and the featured player). |
