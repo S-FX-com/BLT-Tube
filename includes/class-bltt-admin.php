@@ -712,7 +712,7 @@ class BLTT_Admin {
             <div class="blt-card">
                 <div class="blt-card-header">
                     <h2><?php esc_html_e( 'Show a Playlist as a Video Gallery', 'blt-tube' ); ?></h2>
-                    <p><?php esc_html_e( 'Shows the videos of a playlist as thumbnails with titles, in a choice of layouts. Nothing from YouTube loads until a visitor clicks a video. With an API key the gallery can show up to 50 videos; without one it reads the playlist\'s public feed, which only lists the latest 15.', 'blt-tube' ); ?></p>
+                    <p><?php esc_html_e( 'Shows the videos of a playlist, or a list of videos you choose, as thumbnails with titles, in a choice of layouts. Nothing from YouTube loads until a visitor clicks a video. With an API key a playlist gallery can show up to 50 videos; without one it reads the playlist\'s public feed, which only lists the latest 15, and a videos list gets titles but no dates.', 'blt-tube' ); ?></p>
                 </div>
                 <div class="blt-card-body">
                     <h3><?php esc_html_e( 'Grid (default)', 'blt-tube' ); ?></h3>
@@ -729,6 +729,8 @@ class BLTT_Admin {
 
                     <h3><?php esc_html_e( 'A whole channel, newest first', 'blt-tube' ); ?></h3>
                     <code class="blt-code">[blt_tube_gallery id="UUxxxxxxxxxxxxxxxxxxxxxx" show_header="yes" max="24" load_more="yes"]</code>
+                    <p class="blt-field-desc"><?php esc_html_e( 'Specific videos instead of a playlist — IDs or URLs, separated by commas:', 'blt-tube' ); ?></p>
+                    <code class="blt-code">[blt_tube_gallery videos="RrQS3be1Srg, https://youtu.be/SpJml32lG8U" layout="featured" thumbs="strip" show_date="no"]</code>
                     <p class="blt-field-desc"><?php esc_html_e( 'A channel\'s uploads playlist ID is its channel ID with the leading UC replaced by UU.', 'blt-tube' ); ?></p>
 
                     <h3><?php esc_html_e( 'All supported attributes', 'blt-tube' ); ?></h3>
@@ -743,15 +745,16 @@ class BLTT_Admin {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td><code>id</code></td><td><em><?php esc_html_e( 'saved playlist', 'blt-tube' ); ?></em></td><td><?php esc_html_e( 'YouTube playlist ID. Use a channel\'s uploads playlist (UU…) to show a whole channel.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>id</code></td><td><em><?php esc_html_e( 'saved playlist', 'blt-tube' ); ?></em></td><td><?php esc_html_e( 'YouTube playlist ID. Use a channel\'s uploads playlist (UU…) to show a whole channel. Ignored when videos is set.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>videos</code></td><td><em><?php esc_html_e( 'none', 'blt-tube' ); ?></em></td><td><?php esc_html_e( 'Specific videos instead of a playlist: video IDs or URLs (watch?v=, youtu.be, shorts) separated by commas, in the order to show them. Up to 50; all of them show unless max is set.', 'blt-tube' ); ?></td></tr>
                         <tr><td><code>layout</code></td><td><code>grid</code></td><td><?php esc_html_e( 'grid, featured, carousel or list.', 'blt-tube' ); ?></td></tr>
                         <tr><td><code>play</code></td><td><code>inline</code></td><td><?php esc_html_e( 'inline (plays in place), lightbox (opens in a modal) or youtube (opens YouTube in a new tab). The featured layout always plays in its main player.', 'blt-tube' ); ?></td></tr>
                         <tr><td><code>columns</code></td><td><code>3</code></td><td><?php esc_html_e( 'Videos per row (1–6) when the gallery is wider than 840px. Featured layout default: 4.', 'blt-tube' ); ?></td></tr>
                         <tr><td><code>columns_tablet</code></td><td><code>2</code></td><td><?php esc_html_e( 'Videos per row when the gallery is 481–840px wide. Featured layout default: 3.', 'blt-tube' ); ?></td></tr>
                         <tr><td><code>columns_mobile</code></td><td><code>1</code></td><td><?php esc_html_e( 'Videos per row when the gallery is 480px wide or less. Featured layout default: 2.', 'blt-tube' ); ?></td></tr>
-                        <tr><td><code>max</code></td><td><code>12</code></td><td><?php esc_html_e( 'How many videos to show (up to 50; up to 15 without an API key).', 'blt-tube' ); ?></td></tr>
-                        <tr><td><code>order</code></td><td><code>playlist</code></td><td><?php esc_html_e( 'playlist (the playlist\'s own order) or newest (most recently published first).', 'blt-tube' ); ?></td></tr>
-                        <tr><td><code>show_header</code></td><td><code>no</code></td><td><?php esc_html_e( 'Show the channel avatar and name, linked to the channel.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>max</code></td><td><code>12</code></td><td><?php esc_html_e( 'How many videos to show (up to 50; up to 15 for a playlist without an API key). With videos, all of them by default.', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>order</code></td><td><code>playlist</code></td><td><?php esc_html_e( 'playlist (the playlist\'s or the videos list\'s own order) or newest (most recently published first; needs an API key with videos).', 'blt-tube' ); ?></td></tr>
+                        <tr><td><code>show_header</code></td><td><code>no</code></td><td><?php esc_html_e( 'Show the channel avatar and name, linked to the channel (with videos, the first video\'s channel).', 'blt-tube' ); ?></td></tr>
                         <tr><td><code>show_title</code></td><td><code>yes</code></td><td><?php esc_html_e( 'Show each video\'s title.', 'blt-tube' ); ?></td></tr>
                         <tr><td><code>show_date</code></td><td><code>yes</code></td><td><?php esc_html_e( 'Show each video\'s publish date.', 'blt-tube' ); ?></td></tr>
                         <tr><td><code>show_description</code></td><td><code>no</code></td><td><?php esc_html_e( 'Show a short description excerpt (list layout and the featured player).', 'blt-tube' ); ?></td></tr>

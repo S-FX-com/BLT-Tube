@@ -339,39 +339,59 @@
     }
 
     /* ---------------------------------------------------------------
-     * Thumbnails: maxres → hq fallback
+     * Thumbnails: maxres → sd → hq fallback
      *
-     * For a video with no HD thumbnail YouTube answers maxresdefault.jpg with
-     * a 4:3 grey placeholder (and a 404 that still renders as an image), so
-     * the tell is the aspect ratio: a real maxres is always 16:9.
+     * hqdefault.jpg exists for every video; sddefault and maxresdefault only
+     * for uploads that were large enough. For a missing size YouTube serves a
+     * grey 120×90 placeholder — usually with a 404, but a 200 happens too — so
+     * neither the error event nor the status can be relied on: the tell is
+     * the decoded width. The server already leaves out the sizes it knows are
+     * missing; this handles the ones it could not check.
      * ------------------------------------------------------------- */
 
-    function useFallback(img) {
-        var fallback = img.getAttribute('data-fallback');
+    var PLACEHOLDER_WIDTH = 120;
 
-        if (!fallback || img.getAttribute('data-fell-back')) {
+    function isThumb(img) {
+        return !!(img && img.classList && img.classList.contains('bltt-gallery__img'));
+    }
+
+    function fileName(url) {
+        return (url || '').split('#')[0].split('?')[0].split('/').pop();
+    }
+
+    /**
+     * Drop the candidate the browser just tried from srcset, so it picks the
+     * next size down; once only the hqdefault `src` is left, use that.
+     */
+    function dropCurrentSource(img) {
+        var srcset = img.getAttribute('srcset');
+        var current = fileName(img.currentSrc || img.src);
+
+        if (!srcset || !current) {
             return;
         }
 
-        img.setAttribute('data-fell-back', '1');
-        img.removeAttribute('srcset');
-        img.removeAttribute('sizes');
-        img.src = fallback;
+        var kept = srcset.split(',').map(function (entry) {
+            return entry.trim();
+        }).filter(function (entry) {
+            return entry && fileName(entry.split(/\s+/)[0]) !== current;
+        });
+
+        if (kept.length <= 1) {
+            img.removeAttribute('srcset');
+            img.removeAttribute('sizes');
+        } else {
+            img.setAttribute('srcset', kept.join(', '));
+        }
     }
 
     function checkThumb(img) {
-        if (!img || !img.classList || !img.classList.contains('bltt-gallery__img')) {
+        if (!isThumb(img)) {
             return;
         }
 
-        var src = img.currentSrc || img.src || '';
-
-        if (src.indexOf('maxresdefault') === -1 || !img.naturalWidth || !img.naturalHeight) {
-            return;
-        }
-
-        if (img.naturalWidth / img.naturalHeight < 1.5) {
-            useFallback(img);
+        if (img.naturalWidth > 0 && img.naturalWidth <= PLACEHOLDER_WIDTH) {
+            dropCurrentSource(img);
         }
     }
 
@@ -447,10 +467,8 @@
     }, true);
 
     document.addEventListener('error', function (event) {
-        var img = event.target;
-
-        if (img && img.classList && img.classList.contains('bltt-gallery__img')) {
-            useFallback(img);
+        if (isThumb(event.target)) {
+            dropCurrentSource(event.target);
         }
     }, true);
 

@@ -396,6 +396,7 @@ class BLTT_YouTube_API {
             'description'   => $snippet['description'],
             'published_at'  => $snippet['publishedAt'],
             'channel_title' => $snippet['channelTitle'],
+            'channel_id'    => isset( $snippet['channelId'] ) ? $snippet['channelId'] : '',
             'thumbnail_url' => $thumb_url,
             'tags'          => $tags,
             'duration'      => isset( $item['contentDetails']['duration'] ) ? $item['contentDetails']['duration'] : '',

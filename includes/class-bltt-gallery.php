@@ -1,11 +1,13 @@
 <?php
 /**
- * [blt_tube_gallery] — a YouTube playlist rendered as a visual video gallery.
+ * [blt_tube_gallery] — a YouTube playlist, or a hand-picked list of videos,
+ * rendered as a visual video gallery.
  *
  * Videos are fetched live (no posts are created) and cached in a transient, so
  * a page view never triggers a YouTube request on its own. With an API key the
- * data comes from the YouTube Data API; without one it falls back to the
- * playlist's public RSS feed, which only carries the latest 15 videos.
+ * data comes from the YouTube Data API; without one a playlist falls back to
+ * its public RSS feed (latest 15 videos only) and a list of videos to
+ * YouTube's public oEmbed endpoint (title and channel, no dates).
  *
  * The markup is a facade: thumbnails only. No YouTube iframe or script is
  * loaded until a visitor clicks a video.
@@ -33,6 +35,19 @@ class BLTT_Gallery {
 
     /** The public RSS feed never returns more than this many entries. */
     const RSS_LIMIT = 15;
+
+    /**
+     * Layout of the cached payload. Bump when a cached video's fields change
+     * so entries written by an older version are never read back.
+     */
+    const CACHE_SCHEMA = 2;
+
+    /**
+     * i.ytimg.com answers a thumbnail size a video does not have with a grey
+     * 120×90 placeholder — sometimes with HTTP 404, sometimes with 200 — so
+     * only the decoded width tells a real thumbnail from a missing one.
+     */
+    const PLACEHOLDER_WIDTH = 120;
 
     private static $instance = null;
 
@@ -109,6 +124,7 @@ class BLTT_Gallery {
 
         $atts = shortcode_atts( array(
             'id'               => '',
+            'videos'           => '',
             'layout'           => 'grid',
             'play'             => 'inline',
             'columns'          => '3',
@@ -128,18 +144,41 @@ class BLTT_Gallery {
 
         $is_admin = current_user_can( 'manage_options' );
 
-        $playlist_id = trim( (string) $atts['id'] );
+        /**
+         * Upper bound for the `max` attribute, and for the number of videos a
+         * `videos` list may name.
+         *
+         * @param int $limit Default 50.
+         */
+        $max_limit = max( 1, (int) apply_filters( 'bltt_gallery_max_limit', 50 ) );
 
-        if ( '' === $playlist_id ) {
-            $settings    = get_option( 'bltt_settings', array() );
-            $playlist_id = isset( $settings['playlist_id'] ) ? trim( (string) $settings['playlist_id'] ) : '';
-        }
+        $playlist_id = '';
+        $video_ids   = array();
 
-        if ( '' === $playlist_id || ! BLTT_Shortcode::is_valid_playlist_id( $playlist_id ) ) {
-            return $this->render_admin_only(
-                $is_admin,
-                esc_html__( 'BLT Tube: no valid playlist ID provided. Set one in BLT Tube settings or pass id="PL..." to the shortcode.', 'blt-tube' )
-            );
+        if ( '' !== trim( (string) $atts['videos'] ) ) {
+            // A hand-picked list: `id` is ignored and no playlist is read.
+            $video_ids = array_slice( self::parse_video_ids( $atts['videos'] ), 0, $max_limit );
+
+            if ( ! $video_ids ) {
+                return $this->render_admin_only(
+                    $is_admin,
+                    esc_html__( 'BLT Tube: nothing in videos="…" is a YouTube video ID or URL. Separate them with commas, e.g. videos="dQw4w9WgXcQ, https://youtu.be/…".', 'blt-tube' )
+                );
+            }
+        } else {
+            $playlist_id = trim( (string) $atts['id'] );
+
+            if ( '' === $playlist_id ) {
+                $settings    = get_option( 'bltt_settings', array() );
+                $playlist_id = isset( $settings['playlist_id'] ) ? trim( (string) $settings['playlist_id'] ) : '';
+            }
+
+            if ( '' === $playlist_id || ! BLTT_Shortcode::is_valid_playlist_id( $playlist_id ) ) {
+                return $this->render_admin_only(
+                    $is_admin,
+                    esc_html__( 'BLT Tube: no valid playlist ID provided. Set one in BLT Tube settings, pass id="PL..." to the shortcode, or list videos with videos="…".', 'blt-tube' )
+                );
+            }
         }
 
         $layout = self::pick( $atts['layout'], array( 'grid', 'featured', 'carousel', 'list' ), 'grid' );
@@ -152,15 +191,16 @@ class BLTT_Gallery {
             $play = 'stage';
         }
 
-        /**
-         * Upper bound for the `max` attribute.
-         *
-         * @param int $limit Default 50.
-         */
-        $max_limit = max( 1, (int) apply_filters( 'bltt_gallery_max_limit', 50 ) );
-        $max       = self::clamp( $atts['max'], 1, $max_limit, 12 );
+        // A hand-picked list shows every video named unless `max` says otherwise.
+        if ( $video_ids && ! isset( $raw['max'] ) ) {
+            $max = count( $video_ids );
+        } else {
+            $max = self::clamp( $atts['max'], 1, $max_limit, 12 );
+        }
 
-        $data = $this->get_data( $playlist_id, $max, $order );
+        $data = $video_ids
+            ? $this->get_data( 'videos:' . implode( ',', $video_ids ), $max, $order, $video_ids )
+            : $this->get_data( $playlist_id, $max, $order );
 
         if ( empty( $data['videos'] ) ) {
             if ( ! empty( $data['error'] ) ) {
@@ -169,6 +209,8 @@ class BLTT_Gallery {
                     esc_html__( 'BLT Tube: the video gallery could not be loaded, so visitors see nothing here. YouTube said: %s', 'blt-tube' ),
                     esc_html( $data['error'] )
                 );
+            } elseif ( $video_ids ) {
+                $message = esc_html__( 'BLT Tube: none of the listed videos is available to show.', 'blt-tube' );
             } else {
                 $message = esc_html__( 'BLT Tube: this playlist has no public videos to show.', 'blt-tube' );
             }
@@ -243,7 +285,7 @@ class BLTT_Gallery {
         );
 
         if ( $is_admin ) {
-            $html .= $this->render_admin_notices( $data, $max );
+            $html .= $this->render_admin_notices( $data, $max, $ctx['show_date'] || $ctx['show_desc'] );
         }
 
         if ( self::is_truthy( $atts['show_header'] ) ) {
@@ -301,10 +343,29 @@ class BLTT_Gallery {
         return '<div class="bltt-gallery bltt-gallery--empty"><p class="bltt-gallery__notice">' . $message . '</p></div>';
     }
 
-    private function render_admin_notices( $data, $max ) {
+    /**
+     * @param array $data       Gallery payload.
+     * @param int   $max        The `max` in effect.
+     * @param bool  $wants_meta Whether dates or descriptions were asked for.
+     */
+    private function render_admin_notices( $data, $max, $wants_meta ) {
         $notices = array();
+        $source  = isset( $data['source'] ) ? $data['source'] : '';
 
-        if ( isset( $data['source'] ) && 'rss' === $data['source'] ) {
+        if ( 'oembed' === $source && $wants_meta ) {
+            $notices[] = esc_html__( 'BLT Tube: no YouTube API key is set, so this gallery reads each video\'s title from YouTube\'s public oEmbed service, which carries no publish dates or descriptions.', 'blt-tube' )
+                . ' <a href="' . esc_url( admin_url( 'admin.php?page=bltt-settings' ) ) . '">' . esc_html__( 'Add an API key', 'blt-tube' ) . '</a>';
+        }
+
+        if ( ! empty( $data['skipped'] ) ) {
+            $notices[] = sprintf(
+                /* translators: %s: comma-separated list of YouTube video IDs */
+                esc_html__( 'BLT Tube: these videos could not be loaded and were left out (private, removed, or embedding disabled): %s', 'blt-tube' ),
+                esc_html( implode( ', ', (array) $data['skipped'] ) )
+            );
+        }
+
+        if ( 'rss' === $source ) {
             $notice = esc_html__( 'BLT Tube: no YouTube API key is set, so this gallery is reading the playlist\'s public RSS feed, which only lists the latest 15 videos and has no channel avatar.', 'blt-tube' );
 
             if ( $max > self::RSS_LIMIT ) {
@@ -460,23 +521,35 @@ class BLTT_Gallery {
         $title = $video['title'];
 
         $hq     = 'https://i.ytimg.com/vi/' . $id . '/hqdefault.jpg';
+        $sd     = 'https://i.ytimg.com/vi/' . $id . '/sddefault.jpg';
         $maxres = 'https://i.ytimg.com/vi/' . $id . '/maxresdefault.jpg';
 
         /*
-         * hqdefault always exists; maxresdefault only for HD uploads. The API
-         * tells us which (maxres true/false); the RSS feed does not (null), so
-         * there we offer it and let gallery.js fall back if YouTube answers
-         * with its 4:3 placeholder.
+         * hqdefault (480×360) exists for every video; sddefault (640×480) and
+         * maxresdefault (1280×720) only for uploads that were large enough.
+         * `thumb` is the largest size known to exist — 'maxres', 'sd' or 'hq'
+         * — from the API or from a server-side check of the real image width
+         * (see probe_thumbs()). Empty means unknown: every size is offered and
+         * gallery.js drops the ones that decode as placeholders, largest first.
          */
+        $level      = isset( $video['thumb'] ) ? (string) $video['thumb'] : '';
+        $candidates = array( esc_url( $hq ) . ' 480w' );
+
+        if ( in_array( $level, array( '', 'sd', 'maxres' ), true ) ) {
+            $candidates[] = esc_url( $sd ) . ' 640w';
+        }
+
+        if ( in_array( $level, array( '', 'maxres' ), true ) ) {
+            $candidates[] = esc_url( $maxres ) . ' 1280w';
+        }
+
         $srcset = '';
 
-        if ( ! isset( $video['maxres'] ) || $video['maxres'] ) {
+        if ( count( $candidates ) > 1 ) {
             $srcset = sprintf(
-                ' srcset="%s 480w, %s 1280w" sizes="%s" data-fallback="%s"',
-                esc_url( $hq ),
-                esc_url( $maxres ),
-                esc_attr( $this->sizes( $ctx, $role ) ),
-                esc_url( $hq )
+                ' srcset="%s" sizes="%s"',
+                esc_attr( implode( ', ', $candidates ) ),
+                esc_attr( $this->sizes( $ctx, $role ) )
             );
         }
 
@@ -490,13 +563,13 @@ class BLTT_Gallery {
         $icon = '<span class="bltt-gallery__play" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg></span>';
 
         if ( 'youtube' === $ctx['play'] ) {
-            $url = add_query_arg(
-                array(
-                    'v'    => $id,
-                    'list' => $ctx['playlist_id'],
-                ),
-                'https://www.youtube.com/watch'
-            );
+            $args = array( 'v' => $id );
+
+            if ( '' !== $ctx['playlist_id'] ) {
+                $args['list'] = $ctx['playlist_id'];
+            }
+
+            $url = add_query_arg( $args, 'https://www.youtube.com/watch' );
 
             return sprintf(
                 '<a class="bltt-gallery__thumb" href="%s" target="_blank" rel="noopener noreferrer" aria-label="%s">%s%s</a>',
@@ -607,7 +680,7 @@ class BLTT_Gallery {
      * ------------------------------------------------------------- */
 
     /**
-     * Videos for a playlist, from cache whenever possible.
+     * Videos for a playlist or a hand-picked list, from cache whenever possible.
      *
      * Always returns an array: { videos, source, channel, fetched, expires,
      * error }. `error` is non-empty when the last refresh failed — alongside
@@ -616,9 +689,14 @@ class BLTT_Gallery {
      *
      * Failures are cached too (briefly), so an outage or a bad key costs one
      * request every few minutes rather than one per page view.
+     *
+     * @param string $source    Playlist ID, or "videos:ID,ID,…" for a list.
+     * @param int    $max       Videos wanted.
+     * @param string $order     'playlist' or 'newest'.
+     * @param array  $video_ids The list's IDs when $source is a list.
      */
-    private function get_data( $playlist_id, $max, $order ) {
-        $key    = self::cache_key( 'v', array( $playlist_id, $max, $order ) );
+    private function get_data( $source, $max, $order, $video_ids = array() ) {
+        $key    = self::cache_key( 'v', array( $source, $max, $order ) );
         $cached = get_transient( $key );
         $now    = time();
 
@@ -626,16 +704,19 @@ class BLTT_Gallery {
             return $cached;
         }
 
-        $fresh = $this->fetch( $playlist_id, $max, $order );
+        $fresh = $video_ids
+            ? $this->fetch_videos( $video_ids, $max, $order )
+            : $this->fetch( $source, $max, $order );
 
         if ( ! is_wp_error( $fresh ) ) {
             /**
              * How long a gallery's videos are cached, in seconds.
              *
-             * @param int    $ttl         Default one hour.
-             * @param string $playlist_id Playlist being cached.
+             * @param int    $ttl    Default one hour.
+             * @param string $source Playlist ID being cached, or
+             *                       "videos:ID,ID,…" for a hand-picked list.
              */
-            $ttl = max( MINUTE_IN_SECONDS, (int) apply_filters( 'bltt_gallery_cache_ttl', HOUR_IN_SECONDS, $playlist_id ) );
+            $ttl = max( MINUTE_IN_SECONDS, (int) apply_filters( 'bltt_gallery_cache_ttl', HOUR_IN_SECONDS, $source ) );
 
             $fresh['fetched'] = $now;
             $fresh['expires'] = $now + $ttl;
@@ -724,13 +805,7 @@ class BLTT_Gallery {
                     continue;
                 }
 
-                $videos[] = array(
-                    'id'          => $id,
-                    'title'       => self::clean_text( $by_id[ $id ]['title'], 200 ),
-                    'description' => self::clean_text( $by_id[ $id ]['description'], 600 ),
-                    'published'   => (string) $by_id[ $id ]['published_at'],
-                    'maxres'      => false !== strpos( (string) $by_id[ $id ]['thumbnail_url'], 'maxresdefault' ),
-                );
+                $videos[] = self::video_from_api( $id, $by_id[ $id ] );
             }
         }
 
@@ -739,6 +814,321 @@ class BLTT_Gallery {
             'source'  => 'api',
             'channel' => array(),
         );
+    }
+
+    /**
+     * A cached video record from a BLTT_YouTube_API::get_videos() row.
+     */
+    private static function video_from_api( $id, $detail ) {
+        $thumb_url = (string) $detail['thumbnail_url'];
+
+        if ( false !== strpos( $thumb_url, 'maxresdefault' ) ) {
+            $thumb = 'maxres';
+        } elseif ( false !== strpos( $thumb_url, 'sddefault' ) ) {
+            $thumb = 'sd';
+        } else {
+            $thumb = 'hq';
+        }
+
+        return array(
+            'id'          => $id,
+            'title'       => self::clean_text( $detail['title'], 200 ),
+            'description' => self::clean_text( $detail['description'], 600 ),
+            'published'   => (string) $detail['published_at'],
+            'author'      => self::clean_text( isset( $detail['channel_title'] ) ? $detail['channel_title'] : '', 200 ),
+            'thumb'       => $thumb,
+        );
+    }
+
+    /* ---------------------------------------------------------------
+     * Data: a hand-picked list of videos
+     * ------------------------------------------------------------- */
+
+    /**
+     * The videos of videos="…", in the order given.
+     *
+     * @return array|WP_Error
+     */
+    private function fetch_videos( $ids, $max, $order ) {
+        $api = new BLTT_YouTube_API();
+
+        if ( $api->has_key() ) {
+            return $this->fetch_videos_from_api( $api, $ids, $max, $order );
+        }
+
+        return $this->fetch_videos_from_oembed( $ids, $max, $order );
+    }
+
+    /**
+     * One videos.list request for the whole list. Private and removed videos
+     * are simply absent from the response and are reported as skipped.
+     */
+    private function fetch_videos_from_api( $api, $ids, $max, $order ) {
+        $details = $api->get_videos( $ids );
+
+        if ( is_wp_error( $details ) ) {
+            return $details;
+        }
+
+        $by_id = array();
+
+        foreach ( $details as $detail ) {
+            $by_id[ $detail['video_id'] ] = $detail;
+        }
+
+        $videos     = array();
+        $skipped    = array();
+        $channel_id = '';
+
+        foreach ( $ids as $id ) {
+            if ( ! isset( $by_id[ $id ] ) ) {
+                $skipped[] = $id;
+                continue;
+            }
+
+            $videos[] = self::video_from_api( $id, $by_id[ $id ] );
+
+            // The optional header shows the first video's channel.
+            if ( '' === $channel_id && ! empty( $by_id[ $id ]['channel_id'] ) ) {
+                $channel_id = (string) $by_id[ $id ]['channel_id'];
+            }
+        }
+
+        return array(
+            'videos'     => self::order_and_limit( $videos, $order, $max ),
+            'source'     => 'api',
+            'channel'    => array(),
+            'channel_id' => $channel_id,
+            'skipped'    => $skipped,
+        );
+    }
+
+    /**
+     * Keyless path: YouTube's public oEmbed endpoint, one request per video.
+     * It gives the title and the channel's name and link, but no publish date
+     * or description. Which thumbnail sizes exist is checked separately.
+     */
+    private function fetch_videos_from_oembed( $ids, $max, $order ) {
+        // No dates to sort by, so the list order is final: stop at `max`.
+        $ids = array_slice( $ids, 0, $max );
+
+        $videos     = array();
+        $skipped    = array();
+        $channel    = array();
+        $last_error = null;
+
+        foreach ( $ids as $id ) {
+            $response = wp_remote_get(
+                add_query_arg(
+                    array(
+                        'url'    => rawurlencode( 'https://www.youtube.com/watch?v=' . $id ),
+                        'format' => 'json',
+                    ),
+                    'https://www.youtube.com/oembed'
+                ),
+                array( 'timeout' => 10 )
+            );
+
+            if ( is_wp_error( $response ) ) {
+                $last_error = $response;
+                $skipped[]  = $id;
+                continue;
+            }
+
+            $code = (int) wp_remote_retrieve_response_code( $response );
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+            // 401: private or embedding disabled; 403/404: removed or unknown.
+            if ( 200 !== $code || ! is_array( $body ) || empty( $body['title'] ) ) {
+                $skipped[] = $id;
+                continue;
+            }
+
+            $author = isset( $body['author_name'] ) ? self::clean_text( $body['author_name'], 200 ) : '';
+
+            $videos[] = array(
+                'id'          => $id,
+                'title'       => self::clean_text( $body['title'], 200 ),
+                'description' => '',
+                'published'   => '',
+                'author'      => $author,
+                'thumb'       => '',
+            );
+
+            // The optional header shows the first video's channel.
+            if ( ! $channel && '' !== $author ) {
+                $url     = isset( $body['author_url'] ) ? (string) $body['author_url'] : '';
+                $channel = array(
+                    'title' => $author,
+                    'url'   => 0 === strpos( $url, 'https://www.youtube.com/' ) ? $url : '',
+                    'thumb' => '',
+                );
+            }
+        }
+
+        if ( ! $videos ) {
+            // Every request failed on the way to YouTube: a network problem,
+            // so keep any stale copy and retry later rather than cache "nothing".
+            if ( $last_error && count( $skipped ) === count( $ids ) ) {
+                return $last_error;
+            }
+
+            return new WP_Error( 'bltt_oembed_error', sprintf(
+                /* translators: %s: comma-separated list of YouTube video IDs */
+                __( 'None of the listed videos is available (private, removed, or embedding disabled): %s', 'blt-tube' ),
+                implode( ', ', $ids )
+            ) );
+        }
+
+        return array(
+            'videos'  => $this->probe_thumbs( self::order_and_limit( $videos, $order, $max ) ),
+            'source'  => 'oembed',
+            'channel' => $channel,
+            'skipped' => $skipped,
+        );
+    }
+
+    /* ---------------------------------------------------------------
+     * Thumbnails
+     * ------------------------------------------------------------- */
+
+    /**
+     * Fill in `thumb` — the largest thumbnail size that really exists — for
+     * videos whose source could not say (oEmbed and RSS), by reading the width
+     * of the real image on i.ytimg.com.
+     *
+     * YouTube serves a missing size as a grey 120×90 placeholder, and not
+     * reliably with a 404: a 200 happens too, so the status code proves
+     * nothing — the width does. Only the first few KB of each image are
+     * fetched (a Range request), which is enough for the JPEG header.
+     *
+     * Bounded by a time budget so a long list cannot stall the page view
+     * that refreshes the cache; anything left unchecked stays unknown and is
+     * sorted out in the browser by gallery.js.
+     */
+    private function probe_thumbs( $videos ) {
+        /**
+         * Seconds a cache refresh may spend checking which thumbnail sizes
+         * exist. 0 skips the check and leaves it to the browser.
+         *
+         * @param float $seconds Default 4.
+         */
+        $budget   = (float) apply_filters( 'bltt_gallery_thumb_probe_budget', 4 );
+        $deadline = microtime( true ) + $budget;
+
+        foreach ( $videos as $i => $video ) {
+            if ( '' !== $video['thumb'] || microtime( true ) >= $deadline ) {
+                continue;
+            }
+
+            $videos[ $i ]['thumb'] = $this->probe_thumb( $video['id'] );
+        }
+
+        return $videos;
+    }
+
+    /**
+     * @return string 'maxres', 'sd' or 'hq'; '' when YouTube could not be asked.
+     */
+    private function probe_thumb( $id ) {
+        foreach ( array( 'maxres' => 'maxresdefault', 'sd' => 'sddefault' ) as $level => $file ) {
+            $width = $this->remote_jpeg_width( 'https://i.ytimg.com/vi/' . $id . '/' . $file . '.jpg' );
+
+            if ( null === $width ) {
+                return '';
+            }
+
+            if ( $width > self::PLACEHOLDER_WIDTH ) {
+                return $level;
+            }
+        }
+
+        return 'hq';
+    }
+
+    /**
+     * Width of a remote JPEG from its first bytes.
+     *
+     * @return int|null Width in pixels (0 for a 404), or null if it could not
+     *                  be determined.
+     */
+    private function remote_jpeg_width( $url ) {
+        $response = wp_remote_get( $url, array(
+            'timeout' => 5,
+            'headers' => array( 'Range' => 'bytes=0-4095' ),
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            return null;
+        }
+
+        $code = (int) wp_remote_retrieve_response_code( $response );
+
+        if ( 404 === $code ) {
+            return 0;
+        }
+
+        if ( 200 !== $code && 206 !== $code ) {
+            return null;
+        }
+
+        return self::jpeg_width( wp_remote_retrieve_body( $response ) );
+    }
+
+    /**
+     * Width from a JPEG's Start Of Frame segment, which precedes the image
+     * data and so is present in a truncated download.
+     *
+     * @return int|null
+     */
+    private static function jpeg_width( $bytes ) {
+        $len = strlen( $bytes );
+
+        if ( $len < 4 || "\xFF\xD8" !== substr( $bytes, 0, 2 ) ) {
+            return null;
+        }
+
+        $sof = array( 0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF );
+        $pos = 2;
+
+        while ( $pos + 4 <= $len ) {
+            if ( "\xFF" !== $bytes[ $pos ] ) {
+                return null;
+            }
+
+            $marker = ord( $bytes[ $pos + 1 ] );
+
+            // Fill bytes and markers that carry no length.
+            if ( 0xFF === $marker ) {
+                $pos++;
+                continue;
+            }
+
+            if ( 0x01 === $marker || ( $marker >= 0xD0 && $marker <= 0xD8 ) ) {
+                $pos += 2;
+                continue;
+            }
+
+            if ( in_array( $marker, $sof, true ) ) {
+                if ( $pos + 9 > $len ) {
+                    return null;
+                }
+
+                $width = unpack( 'n', substr( $bytes, $pos + 7, 2 ) );
+
+                return (int) $width[1];
+            }
+
+            // Start Of Scan without a frame header first: give up.
+            if ( 0xDA === $marker ) {
+                return null;
+            }
+
+            $size = unpack( 'n', substr( $bytes, $pos + 2, 2 ) );
+            $pos += 2 + (int) $size[1];
+        }
+
+        return null;
     }
 
     /**
@@ -803,7 +1193,8 @@ class BLTT_Gallery {
                 'title'       => self::clean_text( (string) $entry->title, 200 ),
                 'description' => self::clean_text( $description, 600 ),
                 'published'   => (string) $entry->published,
-                'maxres'      => null,
+                'author'      => '',
+                'thumb'       => '',
             );
         }
 
@@ -819,7 +1210,7 @@ class BLTT_Gallery {
         }
 
         return array(
-            'videos'  => self::order_and_limit( $videos, $order, min( $max, self::RSS_LIMIT ) ),
+            'videos'  => $this->probe_thumbs( self::order_and_limit( $videos, $order, min( $max, self::RSS_LIMIT ) ) ),
             'source'  => 'rss',
             'channel' => $channel,
         );
@@ -828,9 +1219,12 @@ class BLTT_Gallery {
     /**
      * Channel name, link and avatar for the optional header.
      *
-     * The RSS feed already carries the name and link. With an API key it takes
-     * up to two extra requests, so it is fetched only when a gallery actually
-     * shows a header, and cached on its own for a day.
+     * The RSS feed and oEmbed already carry the name and link. With an API key
+     * it takes up to two extra requests, so it is fetched only when a gallery
+     * actually shows a header, and cached on its own for a day.
+     *
+     * @param string $playlist_id Playlist shown, or '' for a hand-picked list.
+     * @param array  $data        Gallery payload; may name a `channel_id`.
      */
     private function get_channel( $playlist_id, $data ) {
         if ( ! empty( $data['channel']['title'] ) ) {
@@ -841,7 +1235,18 @@ class BLTT_Gallery {
             return array();
         }
 
-        $key    = self::cache_key( 'c', array( $playlist_id ) );
+        $channel_id = isset( $data['channel_id'] ) ? (string) $data['channel_id'] : '';
+
+        // A channel's uploads playlist is its channel ID with UC swapped for UU.
+        if ( '' === $channel_id && preg_match( '/^UU[A-Za-z0-9_-]{22}$/', $playlist_id ) ) {
+            $channel_id = 'UC' . substr( $playlist_id, 2 );
+        }
+
+        if ( '' === $channel_id && '' === $playlist_id ) {
+            return array();
+        }
+
+        $key    = self::cache_key( 'c', array( '' !== $channel_id ? $channel_id : $playlist_id ) );
         $cached = get_transient( $key );
 
         if ( is_array( $cached ) ) {
@@ -852,10 +1257,7 @@ class BLTT_Gallery {
         $channel = array();
 
         if ( $api->has_key() ) {
-            // A channel's uploads playlist is its channel ID with UC swapped for UU.
-            if ( preg_match( '/^UU[A-Za-z0-9_-]{22}$/', $playlist_id ) ) {
-                $channel_id = 'UC' . substr( $playlist_id, 2 );
-            } else {
+            if ( '' === $channel_id ) {
                 $channel_id = $api->get_playlist_channel_id( $playlist_id );
             }
 
@@ -889,7 +1291,7 @@ class BLTT_Gallery {
      * cannot be found by name pattern.
      */
     private static function cache_key( $kind, $parts ) {
-        array_unshift( $parts, (int) get_option( self::VERSION_OPTION, 1 ) );
+        array_unshift( $parts, (int) get_option( self::VERSION_OPTION, 1 ), self::CACHE_SCHEMA );
 
         return 'bltt_gal_' . $kind . '_' . md5( implode( '|', $parts ) );
     }
@@ -930,6 +1332,41 @@ class BLTT_Gallery {
 
     private static function is_valid_video_id( $id ) {
         return is_string( $id ) && (bool) preg_match( '/^[A-Za-z0-9_-]{11}$/', $id );
+    }
+
+    /**
+     * Video IDs from a `videos` attribute: IDs and/or URLs separated by commas
+     * or whitespace, in the order given and without repeats.
+     *
+     * Accepts youtube.com/watch?v=, youtu.be/, /shorts/, /live/, /embed/ and
+     * /v/ links (also m. and youtube-nocookie.com), with any extra parameters
+     * such as ?si= or &list=, and bare 11-character IDs.
+     *
+     * @return string[]
+     */
+    public static function parse_video_ids( $value ) {
+        // The editor may have stored "&" as "&#038;" or "&amp;".
+        $value = html_entity_decode( (string) $value, ENT_QUOTES, 'UTF-8' );
+        $ids   = array();
+
+        foreach ( preg_split( '/[\s,;]+/', $value ) as $token ) {
+            $token = trim( $token );
+
+            if ( '' === $token ) {
+                continue;
+            }
+
+            if ( self::is_valid_video_id( $token ) ) {
+                $ids[ $token ] = true;
+                continue;
+            }
+
+            if ( preg_match( '#(?:youtube(?:-nocookie)?\.com/(?:watch\?(?:[^\#]*&)?v=|(?:embed|v|shorts|live)/)|youtu\.be/)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])#i', $token, $m ) ) {
+                $ids[ $m[1] ] = true;
+            }
+        }
+
+        return array_keys( $ids );
     }
 
     /**

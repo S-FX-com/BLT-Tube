@@ -6,7 +6,7 @@ A WordPress plugin that imports videos from a YouTube playlist into any Custom P
 
 - **YouTube API Integration** — Connect with a YouTube Data API v3 key, search for channels, and browse their playlists.
 - **Playlist Embed Shortcode** — Drop `[blt_tube_playlist]` into any post, page, widget, or block to embed a playlist player. No API key required for embedding.
-- **Video Gallery Shortcode** — `[blt_tube_gallery]` shows a playlist (or a whole channel) as thumbnails and titles in a grid, featured, carousel, or list layout. Nothing from YouTube loads until a visitor clicks a video.
+- **Video Gallery Shortcode** — `[blt_tube_gallery]` shows a playlist, a whole channel, or a hand-picked list of videos as thumbnails and titles in a grid, featured, carousel, or list layout. Nothing from YouTube loads until a visitor clicks a video.
 - **Custom Post Type Support** — Select any registered post type (built-in or custom) as the import target.
 - **Field Mapping** — Map any YouTube video data (URL, title, description, duration, view count, etc.) to WordPress custom fields. Supports ACF and all registered meta keys.
 - **Featured Image** — Downloads the highest-resolution YouTube thumbnail and sets it as the post's featured image.
@@ -29,7 +29,7 @@ A WordPress plugin that imports videos from a YouTube playlist into any Custom P
 | What you want to do                                                      | API key required? |
 |--------------------------------------------------------------------------|:-----------------:|
 | Embed a YouTube playlist on a page via `[blt_tube_playlist]`             | **No**            |
-| Show a video gallery via `[blt_tube_gallery]`                            | **Recommended** — without one it shows only the latest 15 videos and no channel avatar |
+| Show a video gallery via `[blt_tube_gallery]`                            | **Recommended** — without one a playlist shows only its latest 15 videos, a `videos` list has no dates, and there is no channel avatar |
 | Search for channels in the admin UI                                       | Yes               |
 | Browse a channel's playlists in the admin UI                              | Yes               |
 | Import videos as WordPress posts (titles, descriptions, thumbnails, tags) | Yes               |
@@ -99,13 +99,19 @@ Uses the playlist ID configured in BLT Tube settings:
 
 ## Video Gallery Shortcode
 
-`[blt_tube_gallery]` renders a playlist as a visual gallery — thumbnails and titles — instead of a single player. Videos are read live from YouTube and cached; no posts are created, so it works independently of the import features.
+`[blt_tube_gallery]` renders a playlist, or a list of videos you choose, as a visual gallery — thumbnails and titles — instead of a single player. Videos are read live from YouTube and cached; no posts are created, so it works independently of the import features.
 
 ```
 [blt_tube_gallery id="PLxxxxxxxxxxxxxxxx"]
 ```
 
 With no `id`, it uses the playlist saved in BLT Tube settings.
+
+**Specific videos** — pass video IDs or URLs instead of a playlist. Any mix of IDs, `watch?v=`, `youtu.be/` and `/shorts/` links works, extra parameters such as `?si=` included. When `videos` is set, `id` is ignored and no playlist is read.
+
+```
+[blt_tube_gallery videos="RrQS3be1Srg, https://youtu.be/SpJml32lG8U?si=abc" layout="featured" thumbs="strip" show_date="no"]
+```
 
 ### Layouts
 
@@ -143,15 +149,16 @@ With no `id`, it uses the playlist saved in BLT Tube settings.
 
 | Attribute          | Default            | Description |
 |--------------------|--------------------|-------------|
-| `id`               | *(saved playlist)* | YouTube playlist ID. `UU…` uploads playlists show a whole channel. |
+| `id`               | *(saved playlist)* | YouTube playlist ID. `UU…` uploads playlists show a whole channel. Ignored when `videos` is set. |
+| `videos`           | *(none)*           | Specific videos instead of a playlist: IDs or URLs separated by commas, in the order to show them. Up to 50. All of them show unless `max` is set. |
 | `layout`           | `grid`             | `grid`, `featured`, `carousel`, or `list`. |
 | `play`             | `inline`           | `inline` replaces the thumbnail with the player; `lightbox` opens it in a modal; `youtube` opens YouTube in a new tab. The featured layout always plays in its main player. |
 | `columns`          | `3`                | Videos per row (1–6) when the gallery is wider than 840px. Featured layout default: `4`. |
 | `columns_tablet`   | `2`                | Videos per row when the gallery is 481–840px wide. Featured layout default: `3`. |
 | `columns_mobile`   | `1`                | Videos per row when the gallery is 480px wide or less. Featured layout default: `2`. |
-| `max`              | `12`               | How many videos to show. Up to 50 (filter: `bltt_gallery_max_limit`); up to 15 without an API key. |
-| `order`            | `playlist`         | `playlist` keeps the playlist's own order; `newest` sorts by publish date, newest first. |
-| `show_header`      | `no`               | Show the channel avatar and name, linked to the channel. |
+| `max`              | `12`               | How many videos to show. Up to 50 (filter: `bltt_gallery_max_limit`); up to 15 for a playlist without an API key. With `videos`, defaults to all of them. |
+| `order`            | `playlist`         | `playlist` keeps the playlist's (or the `videos` list's) own order; `newest` sorts by publish date, newest first. Needs an API key with `videos`. |
+| `show_header`      | `no`               | Show the channel avatar and name, linked to the channel. With `videos`, the first video's channel. |
 | `show_title`       | `yes`              | Show each video's title. |
 | `show_date`        | `yes`              | Show each video's publish date. |
 | `show_description` | `no`               | Show a short description excerpt (list layout and the featured player). |
@@ -164,13 +171,14 @@ The column breakpoints follow the **gallery's own width**, not the screen's, so 
 
 ### Where the videos come from
 
-- **With an API key** (BLT Tube settings): the YouTube Data API. About 2 quota units per refresh for a typical gallery.
-- **Without an API key**: the playlist's public RSS feed. It only lists the **latest 15 videos** and has no channel avatar. Administrators see a note about this on the page; visitors do not.
+- **With an API key** (BLT Tube settings): the YouTube Data API. About 2 quota units per refresh for a typical playlist gallery, 1 for a `videos` list.
+- **Without an API key**, a playlist comes from its public RSS feed, which only lists the **latest 15 videos** and has no channel avatar. A `videos` list comes from YouTube's public oEmbed service (one request per video), which gives each video's title and channel but **no publish date or description**. Administrators see a note about this on the page; visitors do not.
 
-Results are cached for **one hour** per playlist, `max` and `order`, so page views never call YouTube directly. Change the lifetime with the `bltt_gallery_cache_ttl` filter:
+Results are cached for **one hour** per playlist (or list), `max` and `order`, so page views never call YouTube directly. Change the lifetime with the `bltt_gallery_cache_ttl` filter:
 
 ```php
-add_filter( 'bltt_gallery_cache_ttl', function ( $seconds, $playlist_id ) {
+add_filter( 'bltt_gallery_cache_ttl', function ( $seconds, $source ) {
+    // $source is the playlist ID, or "videos:ID,ID,…" for a list.
     return 15 * MINUTE_IN_SECONDS;
 }, 10, 2 );
 ```
@@ -182,6 +190,8 @@ If YouTube cannot be reached when the cache expires, the gallery keeps showing t
 ### Performance and privacy
 
 Only thumbnails are rendered on page load — no YouTube iframe or script — and the player is created when a visitor clicks. Thumbnails are lazy-loaded from YouTube's image host (`i.ytimg.com`). The stylesheet and script (vanilla JS, no jQuery) load only on pages that contain the shortcode.
+
+Each thumbnail is offered at the largest size the video really has — `maxresdefault` (1280×720), then `sddefault` (640×480), then `hqdefault` (480×360), which always exists. YouTube answers a missing size with a 120×90 grey placeholder, sometimes with HTTP 200, so the plugin never trusts the status code: the API says which sizes exist, and for the keyless sources the plugin reads the real image width from the first few KB of the file when it refreshes the cache (at most 4 seconds per refresh, filter `bltt_gallery_thumb_probe_budget`). Whatever is left unchecked is verified in the browser by its decoded width and stepped down if it is a placeholder.
 
 ### Styling
 
